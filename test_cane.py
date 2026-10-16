@@ -835,7 +835,20 @@ def check_hover():
     assert hover.delay_for({"fullscreen": False, "browser": False}) == hover.DELAY
     assert hover.near_bar(1500, 100, 1920, 560, 104, 24)
     assert not hover.near_bar(900, 400, 1920, 560, 104, 24)
-    print("hover: %d checks passed" % (len(cases) + 6))
+
+    # Full screen vs maximised. Real rects from Panda's laptop (taskbar on
+    # auto-hide, so the work area is the whole monitor): a maximised window
+    # covered the monitor and hover never opened over it.
+    import winsys
+    mon = (0, 0, 1536, 960)
+    full_cases = [((-7, -7, 1543, 967), True, "Chrome_WidgetWin_1", False),
+                  ((0, 0, 1536, 960), False, "Chrome_WidgetWin_1", True),  # F11
+                  ((0, 0, 1536, 960), False, "UnityWndClass", True),       # game
+                  ((952, 24, 1512, 298), False, "TkTopLevel", False),
+                  ((0, 0, 1536, 960), False, "WorkerW", False)]            # desktop
+    for rect, zoomed, cls, want in full_cases:
+        assert winsys.is_fullscreen(rect, mon, zoomed, cls) is want, (rect, cls)
+    print("hover: %d checks passed" % (len(cases) + 6 + len(full_cases)))
 
 
 def check_soul():

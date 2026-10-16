@@ -22,6 +22,7 @@ u32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
 u32.MonitorFromWindow.restype = wintypes.HMONITOR
 u32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
 u32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+u32.IsZoomed.argtypes = [wintypes.HWND]
 u32.GetAsyncKeyState.restype = ctypes.c_short
 u32.GetAsyncKeyState.argtypes = [ctypes.c_int]
 k32.OpenProcess.restype = wintypes.HANDLE
@@ -74,18 +75,30 @@ def foreground():
     exe = _exe(pid.value)
 
     full = False
-    if cls.value not in DESKTOP_CLASSES:
-        r, mi = wintypes.RECT(), MONITORINFO()
-        mi.cbSize = ctypes.sizeof(MONITORINFO)
-        if (u32.GetWindowRect(hwnd, ctypes.byref(r)) and u32.GetMonitorInfoW(
-                u32.MonitorFromWindow(hwnd, 2), ctypes.byref(mi))):
-            m = mi.rcMonitor
-            # A maximised window stops at the taskbar; only true full screen
-            # (video, games, F11) covers the whole monitor.
-            full = (r.left <= m.left and r.top <= m.top
-                    and r.right >= m.right and r.bottom >= m.bottom)
+    r, mi = wintypes.RECT(), MONITORINFO()
+    mi.cbSize = ctypes.sizeof(MONITORINFO)
+    if (u32.GetWindowRect(hwnd, ctypes.byref(r)) and u32.GetMonitorInfoW(
+            u32.MonitorFromWindow(hwnd, 2), ctypes.byref(mi))):
+        m = mi.rcMonitor
+        full = is_fullscreen((r.left, r.top, r.right, r.bottom),
+                             (m.left, m.top, m.right, m.bottom),
+                             bool(u32.IsZoomed(hwnd)), cls.value)
     return {"hwnd": hwnd, "exe": exe, "title": buf.value, "cls": cls.value,
             "fullscreen": full, "browser": exe in BROWSERS}
+
+
+def is_fullscreen(rect, monitor, zoomed, cls):
+    """True full screen (video, games, F11) - not merely maximised.
+
+    Covering the monitor is not enough: with the taskbar on auto-hide a
+    maximised window covers it too (its frame overhangs by ~7 px), and
+    hover-to-open stopped working over every maximised window. Windows flags
+    a maximised window as zoomed; true full screen is not flagged.
+    """
+    if zoomed or cls in DESKTOP_CLASSES:
+        return False
+    return (rect[0] <= monitor[0] and rect[1] <= monitor[1]
+            and rect[2] >= monitor[2] and rect[3] >= monitor[3])
 
 
 def cursor():

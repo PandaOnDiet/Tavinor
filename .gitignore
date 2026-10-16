@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+# personal runtime data, never committed
+settings.json
+notes.json
+undo.json

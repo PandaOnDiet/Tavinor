@@ -1,0 +1,398 @@
+# Cane
+
+Text-first command router with a memory. Press **Ctrl+Alt+Space**, type what you
+want, press Enter.
+
+The bar slides in from the top-right corner and fades out when it's done. Open
+items and reminders arrive as toasts stacked underneath it. Click anywhere on a
+toast, or press Escape, to dismiss it.
+
+Every sentence goes through three tiers, cheapest first:
+
+1. **Fixed shapes** (`open X`, `volume 40`, `timer 10 min`) are matched by
+   regex. No model is involved, so they're instant, work offline, and can't be
+   misrouted.
+2. **Loose phrasing** (`skip this one`, `remind me at 5 to...`) goes to a tiny
+   local model that turns it into JSON.
+3. **Questions** go to a cloud model, and the answer appears in a panel.
+   Copilot is one click away.
+
+Tasks like "move my pdfs into paisa" go to Claude Code only when it's switched
+on in the tray menu. Open items and reminders live in `notes.json` next to this
+file.
+
+## Run
+
+Cane lives in the system tray. There is no console window and no terminal left
+open — it runs under `pythonw.exe`.
+
+    python cane.py --install-startup   # start at login (do this once)
+    python cane.py --remove-startup    # stop starting at login
+
+    pythonw cane.py                    # start it now, windowless
+    python  cane.py --show             # start it and open the bar immediately
+
+Startup writes a single file to `shell:startup` (`Cane.vbs`). Deleting that file
+disables autostart; nothing else is touched, no registry, no scheduled task.
+
+### The bar
+
+Ctrl+Alt+Space opens it. As you type it shows what it is about to do, so you
+never press Enter blind:
+
+| Key | Result |
+|---|---|
+| typing | Live rows: the action it recognised (typos corrected), matching apps, then "ask &lt;model&gt;" and "search the web" |
+| ↑ / ↓ | Move the highlight |
+| Enter | Runs the highlighted row, or the raw text when there are no rows |
+| click / hover | Same as highlight + Enter |
+| Escape | Closes the bar |
+
+Rows come from `suggest()`, which is pure and offline — no model, no network —
+because it runs on every keystroke. Anything it cannot name still goes to the
+model on Enter.
+
+**It stays open between commands.** After `timer 10 min` or a question, the bar
+clears its input and waits for the next one, so one hotkey press covers a whole
+run of work. It closes itself after 30 seconds idle (it is always-on-top, and a
+forgotten one is in the way), on Escape, or immediately after a command that
+puts another window in front — opening an app, a web search, Copilot, lock,
+screenshot, media keys (`HIDE_AFTER`).
+
+**Questions keep their thread** while the bar is open: the last two Q&A pairs
+travel with the next question, so "and how do I undo that?" resolves. Closing
+the bar clears it.
+
+### Tray icon
+
+| Action | Result |
+|---|---|
+| Left click | Opens the bar |
+| Right click | Menu: Open Cane / Open items / Settings… / Quit Cane |
+| Quit Cane | Removes the icon and exits the process |
+
+### Settings
+
+Open it three ways: the **⚙ gear** on the bar, typing **`settings`** (or
+`cane settings`) in the bar, or **tray → Settings…**. `open settings` on its own
+still opens *Windows* Settings, like every other `open X`. Changes apply
+immediately, with no Save button. Close with ✕ or Escape.
+
+| Switch | Default | What it does |
+|---|---|---|
+| Start with Windows | on | Adds/removes `Cane.vbs` in `shell:startup`. Reads the real file, not a saved flag |
+| Cloud answers | on | On: questions go to the answer provider and the answer appears in Cane. Off: Cane sends nothing and opens Copilot with the question copied |
+| Claude Code for tasks | **off** | Tasks like "move my pdfs" open Claude Code in a terminal |
+| Answers → Provider | Ollama | Ollama, Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter, NVIDIA |
+| Answers → API key | — | Paste and press Save. Stored in **Windows Credential Manager** as `Cane/<provider>`, never in `settings.json`. Shown afterwards only as its last four characters. Saving an empty box deletes it |
+| Answers → Model | per provider | Listed live from the provider once a key is saved (typing a name also works). Claude defaults to `claude-opus-5`; the others have no default, because their model names change too often to hard-code |
+| Answers → Test | — | Sends one tiny question. Shows the reply, or the exact reason it failed |
+| Features (11) | all on | Apps & sites, Volume & media, Brightness, Timers, Lock screen, Screenshot, Dark mode, Web search, Weather, Play songs, Reminders. A switched-off feature replies "… is switched off in settings" |
+
+Turning Reminders off stops the *commands*. Reminders you already saved still
+pop up, because silently dropping one you set would be worse than a popup you
+didn't expect.
+
+### Typos
+
+`brigtness 50`, `volum 30`, `timr 5 min`, `wether`, `settigns`, `pasue` all
+work. If the exact wording matches nothing, near-miss words are snapped onto
+Cane's command words (`VOCAB`), and the fixed-shape patterns are tried again.
+The correction is **only accepted if the corrected sentence fully matches a
+pattern**. Otherwise the model gets your original words. App names get the same
+treatment: a close typo opens the app, a distant one gets
+`no 'wtsap' - did you mean WhatsApp?`.
+
+Real words one letter from a keyword are protected (`KEEP`). "whether to buy a
+mac" isn't weather, and "the build timed out after 5 minutes" isn't a timer.
+`lock` is never a correction target, because `clock` is one letter away and a
+typo must never lock your screen.
+
+The icon is `cane.ico` — a dark rounded tile with the same accent chevron the
+command bar uses as its prompt, so the tray and the bar read as one thing. It is
+generated, not committed art:
+
+    python make_icon.py
+
+`make_icon.py` writes the `.ico` by hand (ICONDIR + BMP DIBs) and rasterises the
+artwork with 4x supersampling for antialiasing — no Pillow, stdlib only. Seven
+sizes are packed in (16 through 256) so Windows picks a crisp one everywhere.
+Edit `PANEL`, `ACCENT`, or the chevron points at the top of `render()` and re-run
+to change it. Delete `cane.ico` and Cane falls back to the stock Windows icon.
+
+## What it handles
+
+| You type | What happens |
+|---|---|
+| `open whatsapp`, `open vs code`, `launch brave` | Any of the ~140 apps on your Start menu, typos forgiven |
+| `open downloads`, `open bluetooth settings` | Folders and Settings pages |
+| `open youtube`, `open gmail`, `open github.com` | Websites, or the installed web app if you have one |
+| `volume 40`, `set the volume to 30%` | Sets the exact level (and unmutes) |
+| `turn it up`, `quieter` | ±10%, not the 2% one media key gives |
+| `brightness 70`, `brighter`, `dim the screen` | Built-in screen only; ±20 for the relative forms |
+| `timer 10 min`, `set a timer for 30 seconds` | Alert with a sound when it ends |
+| `lock my laptop`, `take a screenshot` | Screenshot lands in Pictures\Screenshots |
+| `dark mode`, `turn off dark mode` | Switches the Windows theme |
+| `google best laptops`, `search for flights to goa` | Google search in your default browser |
+| `what time is it`, `weather`, `weather in goa` | Instant; weather is live from wttr.in |
+| `how do I undo a git commit`, `12 times 13` | Cloud model answers in a scrollable panel with commands styled as code, and **Copy** / **Ask Copilot** |
+| `ask copilot why is the sky blue` | Opens Copilot and copies the question — press Ctrl+V |
+| `pause`, `skip this one`, `mute` | Media keys, works with any player |
+| `play sapphire` | Resolves the top YouTube hit and **plays it** |
+| `remember the auth talk is waiting on Ravi` | Saves an open item, no due date |
+| `remind me in 20 minutes to check the build` | Saves it with a time; pops up when due |
+| `what's left` / `what am I tracking` | Lists open items, numbered |
+| `mark 2 done` / `done ravi` | Closes an item by number or by words |
+| a task (`move my pdfs into paisa`) | Claude Code in a terminal, **only if switched on** in the tray |
+
+### File tasks: plan, approve, undo
+
+`clean up my downloads`, `move my invoices into paisa`, `sort my desktop` —
+Cane shows a plan and **nothing moves until you press Do it**:
+
+    PLAN   clean up my downloads
+    8 files in Downloads
+      3  Executable installers   → Downloads\Installers
+      3  PDF documents           → Documents\paisa
+      1  Image file              → Pictures
+         1 left where they are
+    nothing is deleted · Undo afterwards
+                          Details   Cancel   Do it
+
+**Details** lists every file. After Do it, **Undo** (or typing `undo`) puts the
+whole batch back and removes the folders it made.
+
+Modelled on OpenClaw's approval step (show exactly what will happen; deny by
+default), but tighter where OpenClaw is weakest: its model writes shell
+commands you approve as text, and its docs say an approval "is not a security
+boundary". Here the planner has **no commands at all**, only
+"these files → this folder":
+
+| Rule | Why |
+|---|---|
+| Move only: no delete, rename, overwrite or shell | A file named `delete everything.pdf` is just a name |
+| Sources must be files the planner was shown | It can't invent paths |
+| Destinations only inside Downloads, Desktop, Documents, Pictures, Videos, Music (≤3 subfolders deep) | `..`, drive letters, `.ssh`, `CON` and junctions pointing outside are refused |
+| Folders found through Windows (`SHGetKnownFolderPath`) | Desktop and Documents are often redirected into OneDrive |
+| Hidden/system files and downloads in progress (`.crdownload`, `.part`) never offered | Moving a live download breaks it |
+| Every file re-checked at Do it; changed or gone → skipped | Nothing moves on a stale plan |
+| Cross-drive moves skipped, not copied | copy + delete is a delete |
+
+The planner is your answer provider (Settings → Answers). It sees **file names,
+sizes and dates** in the folder, plus the names of the folders directly inside
+your six user folders, never file contents. With a cloud provider those names
+leave the laptop. The last batch is recorded in `undo.json`.
+
+Measured on a made-up fixture folder with `nemotron-3-super:cloud`: a plan in
+4–5 s. "Move my invoices and bank statements into paisa" picked exactly those 3
+files and found the existing `Documents\paisa`. "Clean up my downloads" sometimes
+makes a folder for a single file, despite being told not to.
+
+### Where your words go
+
+Commands and reminders never leave the laptop: the router is a local model.
+**Questions go to the answer provider you pick** in Settings — Ollama's cloud by
+default, or Anthropic, OpenAI, Gemini, Groq, OpenRouter or NVIDIA with your key.
+If a keyed provider fails (bad key, quota, offline), Ollama answers instead and
+the panel's first line says why. Weather asks wttr.in with your IP or the place
+you name. Nothing else goes out.
+
+The Anthropic provider uses Anthropic's official SDK (`pip install anthropic`),
+the only package Cane depends on, and only for that provider. Without it the
+other six still work. Claude Opus 5 requests carry `fallbacks: "default"`: if
+Claude's safety classifiers decline a question, Anthropic reruns it on a
+fallback model server-side rather than returning nothing. Answers use `effort:
+low`, because they are four-sentence answers in a bar.
+
+### Why Copilot needs Ctrl+V
+
+Neither the Copilot app (`ms-copilot:`) nor copilot.microsoft.com accepts a
+question in the link. Both were tested and both opened with an empty box.
+Typing it in for you would mean sending keystrokes into whichever window has
+focus. If Copilot were slow to start, that could be a terminal. So Cane copies
+the question to the clipboard and opens Copilot, and you paste it.
+
+## Reminders
+
+Times understood: `in 20 minutes`, `in 2 hours`, `in 3 days`, `at 3pm`,
+`at 15:30`, `tomorrow`, `tomorrow at 9am`, `tonight`. A bare `at 3` means the
+afternoon, and a time that has already passed today rolls to tomorrow.
+
+If no time is understood the item is still saved — as an untimed open item
+rather than being silently dropped. The bar tells you which happened.
+
+A sweep runs every 30s and pops due reminders on top of whatever you're doing.
+Each fires once. `notes.json` is plain JSON, so you can edit or clear it by hand.
+
+## Config
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `CANE_MODEL` | `qwen3:1.7b` | Router: any local ollama model |
+| `CANE_ANSWER_MODEL` | `nemotron-3-super:cloud` | Answers: any ollama model, local or cloud |
+| `CANE_CWD` | `~` | Working directory Claude escalations start in |
+
+`settings.json` holds everything the Settings window changes (`claude`,
+`cloud_answers`, `provider`, `answer_model` for Ollama, `model:<provider>` for
+the rest, `feature:<name>`). A missing key means the default, and a corrupt
+file reads as defaults. The `answer_model` setting overrides
+`CANE_ANSWER_MODEL`. API keys are not in it: see Settings.
+
+## Test
+
+    python test_cane.py          # logic only, no model needed
+    python test_cane.py --model  # also end-to-end routing + model-only routing
+
+`--model` runs two checks. `check_model` goes through `parse()`, which answers
+most sentences from the fixed patterns. So it cannot show whether the model
+understands. `check_route` calls the model directly on 46 phrasings, 17 of them
+held out (none is an example in the prompt).
+
+**Adding a command is a three-place change:** the handler in `dispatch()`, the
+name in `INTENTS`, and a line plus an example in `SYSTEM`. `INTENTS` is also
+the JSON schema's enum, so a command missing from it is one the model
+*cannot* choose, however well it understands you. Actions with side effects
+(lock, theme, screenshot, brightness, volume) also need a `MODEL_GUARDS`
+entry, so a misread can never trigger them unless your words mention them.
+
+## When a media command does nothing
+
+    python cane.py --media next   # 3s to focus your player, then sends the key
+
+This bypasses the model entirely, so it splits the two possible faults:
+
+- **Works here, but not from the bar** - a focus problem on our side.
+- **Fails here too** - your player isn't listening for media keys. Chrome and
+  Edge need `Hardware Media Key Handling` enabled in `chrome://flags`; a plain
+  YouTube tab ignores them otherwise.
+
+Media keys are sent with `KEYEVENTF_EXTENDEDKEY` and the bar withdraws itself
+first. Both are required: without the flag the player never sees the key, and
+without the withdraw the keypress lands on our own borderless window.
+
+## Measured
+
+On an i5-13420H, 16 GB, no discrete GPU (CPU inference), 12 routing cases:
+
+| Model | Median | Max | Correct |
+|---|---|---|---|
+| `qwen3:1.7b` | **0.77s** | 1.57s | 12/12 |
+| `qwen2.5-coder:7b` | 2.49s | 7.96s | 12/12 |
+
+Both route correctly; the 1.7b is 3.2x faster, which is the difference between
+instant and noticeable.
+
+**The model alone, 47 phrasings, patterns bypassed** (2026-09-23). "Before" is
+the prompt that listed only 10 actions. Brightness, dark mode, lock, weather
+and volume levels were fixed patterns the model had never been told about, and
+the schema's enum made them impossible for it to choose:
+
+| Model | Before | After | Median |
+|---|---|---|---|
+| `qwen3:1.7b` (local, the router) | 39/47 | **47/47** (twice) | 1.2s |
+| `nemotron-3-super:cloud` | 40/47 | 47/47 | 1.0s |
+| `qwen2.5-coder:7b` (local) | 39/47 | 47/47 | 3.5s, one 50s stall |
+
+Three models of very different sizes missed the *same* phrases ("it's too
+bright" → volume, "lock it" → Claude task). That pointed at the prompt, not the
+model size, and fixing the prompt closed the gap without giving up the local
+model. Cold load is ~12s on the 1.7b, once, then `keep_alive`
+holds it in RAM.
+
+Answer backends, same question ("undo the last commit but keep my changes"):
+
+| Backend | Time | Answer |
+|---|---|---|
+| `nemotron-3-super:cloud` | **1.5–4.3s** | Correct, complete |
+| `claude -p` (Haiku) | 11.0s | Correct — mostly Claude Code startup |
+| `qwen3:1.7b` (local) | 4.1s | **Wrong**: `git reset --soft` with no `HEAD~1` is a no-op |
+| `qwen2.5-coder:7b` (local) | 42.3s | Correct, far too slow on CPU |
+| `minimax-m3:cloud` | — | Not in the free tier |
+
+Everyday-command probe (24 sentences, real parser and dispatcher, side
+effects mocked): **5 right before this tier existed, 19 now**. Of the other
+five, two apps aren't installed and one folder doesn't exist, and Cane says so.
+One is a task that correctly waits for Claude Code. The last is `shut down in 1
+hour`, which isn't built yet.
+
+## Notes
+
+- **Cane starts ollama itself** if it is not running, and preloads the model at
+  launch so the first thing you type is fast. If the server genuinely cannot be
+  started, commands report `model offline` — they no longer fall back to
+  escalation. Escalating on a dead dependency turned every keystroke into a new
+  terminal window while making the app look like it was working.
+- `keep_alive: 8h` keeps the model resident once loaded.
+- `play <song>` resolves the top YouTube result's video id from the search HTML
+  and opens the watch URL, so the song actually starts. Opening a search page
+  was never "play the song" — it showed results and waited for a click. Costs
+  ~2s for the search fetch. Falls back to the search page if no id is found.
+- `think: false` matters — qwen3 is a hybrid reasoner, and thinking blows the
+  latency budget for what is only a classification job.
+- Time parsing is a regex, deliberately not the model. Small models fumble date
+  arithmetic, and a reminder at the wrong time is worse than no reminder.
+- The model also loads **each time the bar opens**, using an empty generate
+  that costs no inference. After 8h idle the model was unloaded and the first
+  command took 19s. Loading while you type hides most of that.
+- Apps come from `Get-StartApps`, read once at launch (~1–5s, in the
+  background). PATH, which Cane used before, held a handful of command-line
+  tools. WhatsApp, Settings and Brave were installed but couldn't be opened.
+- Volume goes through the endpoint-volume COM interface via ctypes. Media keys
+  only step 2% and can't set a level.
+- Adding an intent means adding an example to `SYSTEM` too. Dropping the media
+  examples once cost `skip this one`, which silently started escalating instead.
+
+## Hardening
+
+Each of these was a real defect, found by probing rather than by the happy-path
+tests. `check_edges()` in `test_cane.py` guards all of them.
+
+- **No shell anywhere.** Escalation runs `claude` directly with
+  `CREATE_NEW_CONSOLE`; launching uses `os.startfile` on a resolved path. Going
+  through `cmd /c start ... cmd /k` meant cmd reparsed the sentence, so
+  `x" & calc & "y` actually launched calc — and any ordinary command containing
+  `&`, `|`, `>` or a quote was silently mangled.
+- **An empty `done` ref matches nothing.** Substring-matching on `""` is true for
+  every row, so a bare "done" quietly closed whichever item was first.
+- **Nonsense times save an untimed item** instead of raising. `at 25pm` used to
+  crash out of dispatch.
+- **A corrupt `notes.json` degrades to empty.** Every row is normalised on load,
+  so a hand edit or a truncated write cannot take the app down.
+- **One bad date no longer stops every reminder.** The sweep skips the row and
+  marks it, rather than aborting the whole pass.
+- Writes take a lock: the reminder sweep and the bar are different threads.
+- **Toasts dismiss on click, not just Escape.** A borderless Toplevel may never
+  take keyboard focus, which left them impossible to close.
+- **Only one list window exists at a time.** Repeated "what's left" used to
+  stack new windows downward until they ran off the bottom of the screen.
+- **A media intent needs a media word.** A small model forced to choose picks
+  the nearest verb: `turn on dark mode` pressed volume-down.
+- **A reminder about a command is not the command.** `remind me to take a
+  screenshot at 5` must save a note; the fixed-shape tier steps aside for any
+  sentence starting with remind/remember/note.
+- **Weather never reaches a language model.** It has no live data and would
+  guess, so weather is matched first and fetched live.
+- **"Settings" opens Settings.** Two Start-menu apps are named Settings, one a
+  notification tool. Settings pages are resolved before the app index.
+- **A misspelt keyword can't pick a wrong action.** `brigtness up` once reached
+  the model and turned the *volume* up. The word "up" satisfied the media guard.
+  Typo correction now runs before the model, and only a full pattern match
+  counts.
+- **Setting descriptions anchor top-left.** A west-anchored wrapped line is
+  centred on its y, so a two-line description grew upward over its own label.
+- **Panels stack below the bar's *current* height.** With a result list open
+  the bar is up to 210px tall, and a fixed 104 would have dropped an alert on
+  top of the list (`_bar_h()`).
+- **A kept-open bar never takes focus back.** `status()` deliberately does not
+  `focus_force()`: if you moved to another window while the command ran,
+  yanking focus back would interrupt you.
+
+## UI notes
+
+- Rounded corners are faked: the window is keyed out with `-transparentcolor`
+  and the panel is a smoothed polygon on a Canvas. Tk has no rounded primitive.
+  If a display refuses the keying, `make_panel` falls back to square corners
+  rather than failing.
+- `unfocus()` withdraws with no animation, deliberately. The media keypress is
+  sent 250ms later and an animating window would still own focus when it lands.
+- Layout is anchored to the right edge, so it lands correctly on any width.

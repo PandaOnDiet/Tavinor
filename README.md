@@ -310,6 +310,51 @@ doesn't break it until the day is over. Weekdays now work in every time
 phrase: `friday`, `monday at 5pm` - the next one, at 9:00 when no time is
 given. Habits live in `habits.json`.
 
+## Activity (off by default)
+
+Settings > Activity > Track activity. Every 5 seconds the window in front is
+added to a per-minute log: which app, which site (a browser's tab title, its
+last part: "Lofi - YouTube" is youtube), active or idle (no input for 2
+minutes). No keystrokes, screenshots or page contents. The lock screen
+isn't counted. It stays in `cane.db`, is deleted after 30 days, and
+"Delete everything" empties it.
+
+Ask `what did I do today`, `screen time yesterday`, `when am I most
+productive` (the best two hours over 14 days, not counting time on your
+focus-blocked sites), `how long on youtube this week`. The morning check-in
+shows yesterday in one toast after 8 AM.
+
+## Screen access: eyes and hands
+
+Settings > Screen access. Three levels:
+
+| Level | Reads the window in front | Types, presses keys, clicks, switches, runs |
+|---|---|---|
+| Off | no | no |
+| **Ask** (default) | when you ask | only after you press Allow |
+| Full | yes | safe actions on its own |
+
+**Always asks, even on Full** (stricter is fine, looser is not): running a
+command, Enter (it sends messages), Delete, closing windows or tabs
+(Alt+F4, Ctrl+W), typing a line break, and clicking anything named like
+Send, Delete, Pay, Buy, Install, Submit, Sign in, Discard, Close. The click
+check runs on the element actually found, so asking to click "Sen" and
+landing on Send is refused too.
+
+The chat sets an action's `approved` mark only after your click; the
+model's own JSON can't carry it, and the screen tools refuse a gated action
+without it. **Ctrl+Alt+Esc** is the panic key: access drops to Off and
+typing stops at the next character. An orange bar at the top shows while it
+reads or acts. Every action, refusals included, is in the Action log. Full
+drops back to Ask on restart unless you keep it; Off is never raised.
+
+Eyes use Windows UI Automation (built in): a document's text where the app
+exposes it, otherwise the names of what is on screen. Hands type as Unicode
+keystrokes, bring windows forward by attaching to the foreground thread (an
+Alt-tap trick swallowed the first typed letter), and click through UI
+Automation, or with the mouse at the element's centre when the app exposes
+no click action - the cursor is put back afterwards.
+
 ## Reminders
 
 Times understood: `in 20 minutes`, `in 2 hours`, `in 3 days`, `at 3pm`,

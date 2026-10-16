@@ -63,8 +63,14 @@ def allowed():
             | set(EXTRA))
 
 
-def instant(kind):
-    return kind in INSTANT or EXTRA.get(kind, ("", False))[1]
+def instant(a):
+    """Runs without asking? A module's flag may be a function of the action:
+    screen access depends on the level and on what the action does."""
+    kind = a["intent"]
+    if kind in INSTANT:
+        return True
+    flag = EXTRA.get(kind, ("", False))[1]
+    return bool(flag(a) if callable(flag) else flag)
 
 
 def system_prompt():
@@ -202,6 +208,15 @@ def describe(a):
         return a["intent"]
 
 
+def why(a):
+    """On an approval card: the reason an action always asks, if it does."""
+    if a["intent"] != "screen":
+        return ""
+    import access
+    r = access.risky(a)
+    return ("   - always asks: " + r) if r else ""
+
+
 def run_action(a, ui):
     try:
         return str(cane.dispatch(a, ui))
@@ -249,10 +264,14 @@ def converse(text, ui=None, show=None, approve=None, propose=None,
             propose(p["remember"])
         if not p["actions"]:
             break
-        risky = [a for a in p["actions"] if not instant(a["intent"])]
+        risky = [a for a in p["actions"] if not instant(a)]
         ok = True
         if risky:
             ok = bool(approve and approve(p["actions"]))
+            # Only your click sets this - clean() never lets the model's own
+            # JSON carry it - and screen actions refuse to run without it.
+            for a in risky:
+                a["approved"] = ok
         results = []
         for a in p["actions"]:
             if ok:
@@ -395,7 +414,7 @@ def _window(bar, first=None, back=None):
 
         def make():
             nonlocal settle
-            settle = card(["Allow these?"] + ["  • " + describe(a)
+            settle = card(["Allow these?"] + ["  • " + describe(a) + why(a)
                                               for a in actions],
                           [("Allow", lambda: decide(True)),
                            ("Decline", lambda: decide(False))])

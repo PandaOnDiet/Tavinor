@@ -12,7 +12,7 @@ import sys
 import tempfile
 import pathlib
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cane
@@ -782,7 +782,9 @@ def check_agent():
                                    '"lock"}]}', '{"say": "Locked", "actions": []}')
         agent.converse("lock it", show=show, complete=complete,
                        approve=lambda a: True)
-        assert ran == [{"intent": "lock"}], ran
+        # Approved by the click, and marked so - screen actions refuse
+        # to run without that mark.
+        assert ran == [{"intent": "lock", "approved": True}], ran
         n += 4
 
         # A model that never stops acting is cut off.
@@ -1174,7 +1176,187 @@ def check_tasks():
     print("tasks: %d checks passed" % n)
 
 
+def check_activity():
+    """Phase 6: per-minute recording, idle, insights, retention, off switch."""
+    import activity
+    import focus
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    activity.DB, cane.SETTINGS = tmp / "cane.db", tmp / "s.json"
+    focus.STATE = tmp / "f.json"
+    n = 0
+    chrome = lambda title: {"exe": "chrome.exe", "title": title, "browser": True}
+    code = {"exe": "Code.exe", "title": "x.py - VS Code", "browser": False}
+    t0 = datetime(2026, 10, 16, 9, 0)
+
+    # Off by default: nothing answers, nothing is claimed.
+    assert cane.dispatch(cane.quick("what did i do today")).startswith(
+        "activity tracking is off")
+    cane.set_setting("activity", True)
+    n += 1
+
+    # Two hours of VS Code at 9-11, YouTube at 15:00, idle time apart.
+    for m in range(120):
+        activity.record(code, 0, 60, now=t0 + timedelta(minutes=m))
+    for m in range(30):
+        activity.record(chrome("Lofi - YouTube - Google Chrome"), 0, 60,
+                        now=t0.replace(hour=15) + timedelta(minutes=m))
+    activity.record(code, 500, 60, now=t0.replace(hour=16))      # idle
+    activity.record({"exe": "LockApp.exe", "title": "", "browser": False}, 0, 60,
+                    now=t0.replace(hour=17))                      # locked: skipped
+    rows = activity.day_summary(t0.date())
+    assert rows == [("VS Code", 120), ("Youtube (Chrome)", 30)], rows
+    assert activity.active_minutes(t0.date()) == 150
+    assert activity.site_minutes("youtube", t0.date()) == 30
+    assert activity.site_minutes("YouTube", t0.date()) == 30
+    n += 4
+
+    # Best hours ignore distracting sites; too little data says so.
+    assert activity.best_hours(today=t0.date()) == (9, 120), activity.best_hours(
+        today=t0.date())
+    assert activity.best_hours(today=t0.date() + timedelta(days=40)) is None
+    n += 2
+
+    # Retention and wipe.
+    activity.prune(now=t0 + timedelta(days=31))
+    assert activity.day_summary(t0.date()) == []
+    activity.record(code, 0, 60, now=t0)
+    activity.wipe()
+    assert activity.active_minutes(t0.date()) == 0
+    n += 2
+
+    for text, want in [("what did i do today", "today"),
+                       ("screen time", "today"), ("when am i most productive", "productive"),
+                       ("how long on youtube this week", "site"),
+                       ("how much time have i spent on twitch today", "site")]:
+        hit = cane.quick(text)
+        assert hit and hit["intent"] == "activity" and hit["action"] == want, (text, hit)
+        n += 1
+    assert cane.quick("how long on youtube this week")["when"] == "this week"
+    n += 1
+    print("activity: %d checks passed" % n)
+
+
+def check_access():
+    """Phase 7: levels, the always-ask list, unforgeable approval, panic."""
+    import access
+    import agent
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    cane.SETTINGS, access.DB = tmp / "s.json", tmp / "cane.db"
+    access.stop.clear()
+    n = 0
+    ran = []
+    real_do = access._do
+    access._do = lambda act, arg, approved: ran.append((act, arg, approved)) or "ok"
+    try:
+        # Off: nothing at all.
+        access.set_level("off")
+        for act in ("read", "type", "run"):
+            out = access.dispatch({"intent": "screen", "action": act, "arg": "x"})
+            assert out.startswith("screen access is off"), out
+        assert ran == []
+        n += 3
+
+        # Ask (default): reading is fine, hands need the click.
+        cane.SETTINGS.write_text("{}")
+        assert access.level() == "ask"
+        assert access.dispatch({"intent": "screen", "action": "read"}) == "ok"
+        out = access.dispatch({"intent": "screen", "action": "type", "arg": "hi"})
+        assert out.startswith("not done - needs your approval"), out
+        assert access.dispatch({"intent": "screen", "action": "type", "arg": "hi",
+                                "approved": True}) == "ok"
+        n += 4
+
+        # Full: safe actions run; the always-ask list still asks.
+        access.set_level("full")
+        assert access.dispatch({"intent": "screen", "action": "type", "arg": "hi"}) == "ok"
+        assert access.dispatch({"intent": "screen", "action": "keys",
+                                "arg": "Control + S"}) == "ok"
+        for a in [{"action": "run", "arg": "dir"},
+                  {"action": "keys", "arg": "Enter"},
+                  {"action": "keys", "arg": "alt + F4"},
+                  {"action": "keys", "arg": "ctrl+w"},
+                  {"action": "type", "arg": "hello\n"},
+                  {"action": "click", "arg": "Send"},
+                  {"action": "click", "arg": "Pay now"},
+                  {"action": "click", "arg": "Delete account"},
+                  {"action": "click", "arg": "Install"}]:
+            a["intent"] = "screen"
+            assert access.risky(a), a
+            out = access.dispatch(dict(a))
+            assert out.startswith("not done - needs your approval"), (a, out)
+            n += 1
+        assert not access.risky({"action": "click", "arg": "Bold"})
+        # Whole words: "Sender details" is not "Send".
+        assert not access.risky({"action": "click", "arg": "Sender details"})
+        n += 2
+
+        # The model can't approve itself: clean() drops the field.
+        p = agent.parse('{"say": "", "actions": [{"intent": "screen", "action": '
+                        '"run", "arg": "del *", "approved": true}]}')
+        assert "approved" not in p["actions"][0], p
+        assert not agent.instant(p["actions"][0])
+        assert agent.instant({"intent": "screen", "action": "type", "arg": "x"})
+        access.set_level("ask")
+        assert not agent.instant({"intent": "screen", "action": "type", "arg": "x"})
+        n += 4
+
+        # Panic: off, and typing stops mid-word.
+        class Bar:
+            class root:
+                after = staticmethod(lambda ms, f=None: None)
+        access.panic(Bar)
+        assert access.level() == "off" and access.stop.is_set()
+        sent = []
+        import winsys as ws
+        real_send = ws.u32.SendInput
+        ws.u32.SendInput = lambda *a: sent.append(a)
+        try:
+            assert access.type_text("hello") == 0, "typed after the panic key"
+        finally:
+            ws.u32.SendInput = real_send
+        access.set_level("ask")
+        assert not access.stop.is_set()
+        n += 3
+
+        # Restart: full drops to ask unless kept; off is never raised.
+        access.set_level("full")
+        access.on_start()
+        assert access.level() == "ask"
+        access.set_level("full")
+        cane.set_setting("access_keep", True)
+        access.on_start()
+        assert access.level() == "full"
+        access.set_level("off")
+        access.on_start()
+        assert access.level() == "off"
+        n += 3
+
+        # Every action is logged, refusals included.
+        assert len(access.recent()) >= 10
+        n += 1
+    finally:
+        access._do = real_do
+        access.stop.clear()
+    assert access.norm_keys("Shift + ctrl + S") == "ctrl+shift+s"
+
+    # The click script must be valid PowerShell: an unescaped ' in the risky
+    # list ("don't save") broke it, and every click failed silently.
+    seen = []
+    real_ps, real_target = access._ps, access.target
+    access._ps, access.target = (lambda s, timeout=15: seen.append(s) or "NOTFOUND"), \
+        (lambda: 1)
+    try:
+        access._do("click", "it's here", True)
+    finally:
+        access._ps, access.target = real_ps, real_target
+    line = next(l for l in seen[0].splitlines() if l.startswith("$want="))
+    assert "'it''s here'" in line and "don''?t" in line, line
+    print("access: %d checks passed" % (n + 2))
+
+
 if __name__ == "__main__":
+    check_activity()
+    check_access()
     check_tasks()
     check_render()
     check_agent()

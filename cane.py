@@ -49,6 +49,8 @@ import focus  # noqa: E402
 import hover  # noqa: E402
 import soul  # noqa: E402
 import tasks  # noqa: E402
+import access  # noqa: E402
+import activity  # noqa: E402
 
 MODEL =os.environ.get("CANE_MODEL", "qwen3:1.7b")
 # Runs on Ollama's servers through the same local API. Measured 1.5s and
@@ -734,7 +736,7 @@ def _quick(text):
     if re.fullmatch(r"(?:open |edit |show )?(?:cane'?s |my |your )?(?:personality|soul)"
                     r"(?: settings)?", t):
         return {"intent": "soul"}
-    hit = focus.quick(t) or tasks.quick(t)
+    hit = focus.quick(t) or tasks.quick(t) or activity.quick(t)
     if hit:
         return hit
 
@@ -1549,6 +1551,10 @@ def dispatch(intent, ui=None):
         return focus.dispatch(intent, ui)
     if kind in ("task", "habit"):
         return tasks.dispatch(intent, ui)
+    if kind == "activity":
+        return activity.dispatch(intent, ui)
+    if kind == "screen":
+        return access.dispatch(intent, ui)
 
     if kind == "soul":
         if ui:
@@ -1789,6 +1795,12 @@ def describe(it):
         return "remind you: %s" % arg[:32]
     if kind in ("task", "habit"):
         return tasks.describe(it)
+    if kind == "screen":
+        return access.describe(it)
+    if kind == "activity":
+        return {"today": "show what you did today", "yesterday": "show yesterday",
+                "productive": "show your best hours"}.get(
+                    act, "time on %s" % it.get("site", ""))
     if kind == "focus":
         if act == "start":
             return "focus %s min%s" % (it.get("minutes"), " on " + arg[:28]
@@ -2553,16 +2565,22 @@ class Bar:
              setting("claude", False),
              lambda on: set_setting("claude", on)),
         ]
-        rows = -(-len(FEATURES) // 2)         # two columns
         pages = [
             ("Personality", "name, how it talks, your rules, its memory",
              lambda back: soul.open_window(self, back=back)),
             ("Blocked sites", "what focus mode closes, and when",
              lambda back: focus.sites_window(self, back=back)),
+            ("Screen access", "%s - what it may read, type and click"
+             % access.level().title(), lambda back: self._access_page(back)),
+            ("Activity", "%s - what you use, minute by minute"
+             % ("On" if activity.on() else "Off"),
+             lambda back: self._activity_page(back)),
+            ("Features", "switch single commands on or off",
+             lambda back: self._features_page(back)),
             ("Chat", "tasks done by your answer provider",
              lambda back: agent.open_window(self, back=back)),
         ]
-        h = 72 + 52 * len(general) + 34 * len(pages) + 16 + 208 + 38 + 32 * rows + 44
+        h = 72 + 52 * len(general) + 34 * len(pages) + 16 + 208 + 44
         w = tk.Toplevel(self.root)
         self._settings_win = w
         cv = make_panel(w, self.W, h)
@@ -2612,23 +2630,137 @@ class Bar:
         y += 24
 
         y = self._answers_section(w, cv, y)
+        cv.create_text(24, h - 22, text="Changes apply straight away",
+                       fill=DIM, anchor="w", font=FONT_SM)
+        w.focus_force()
+        slide(w, x0, MARGIN, 0.97, x_from=x0 + 40)
 
-        cv.create_text(24, y, text="FEATURES", fill=DIM, anchor="w",
-                       font=("Segoe UI", 8, "bold"))
-        y += 30
+    # -- settings pages
+
+    def _page(self, title, h, back):
+        """A page that opens where Settings was, with "< SETTINGS" back."""
+        w = tk.Toplevel(self.root)
+        cv = make_panel(w, self.W, h)
+        x0 = self._x()
+        w.geometry("+%d+%d" % (x0 + 40, MARGIN))
+
+        def close(*_):
+            slide(w, x0 + 40, MARGIN, 0.0, steps=8, then=w.destroy)
+        self.page_header(w, cv, title, close,
+                         back and (lambda: (close(), back())))
+        w.focus_force()
+        slide(w, x0, MARGIN, 0.97, x_from=x0 + 40)
+        return w, cv, close
+
+    def _toggle_row(self, cv, y, tag, label, desc, on, command):
+        cv.create_text(24, y, text=label, fill=FG, anchor="w", font=FONT_BODY,
+                       tags=tag)
+        cv.create_text(24, y + 11, text=desc, fill=DIM, anchor="nw",
+                       font=FONT_SM, width=self.W - 120, tags=tag)
+        self._toggle(cv, self.W - 60, y - 8, on, command, (tag,))
+
+    def _features_page(self, back=None):
+        rows = -(-len(FEATURES) // 2)         # two columns
+        w, cv, close = self._page("FEATURES", 72 + 32 * rows + 60, back)
         for i, (key, label, _) in enumerate(FEATURES):
             col, row = i // rows, i % rows
-            fx, fy = 24 + col * (self.W // 2), y + row * 32
+            fx, fy = 24 + col * (self.W // 2), 66 + row * 32
             tag = "f_" + key
             cv.create_text(fx + 48, fy + 10, text=label, fill=FG, anchor="w",
                            font=FONT_BODY, tags=tag)
             self._toggle(cv, fx, fy, feature_on(key),
                          lambda on, k=key: set_setting("feature:" + k, on),
                          (tag,))
-        cv.create_text(24, h - 22, text="Changes apply straight away",
-                       fill=DIM, anchor="w", font=FONT_SM)
-        w.focus_force()
-        slide(w, x0, MARGIN, 0.97, x_from=x0 + 40)
+        cv.create_text(24, 72 + 32 * rows + 30, text="A switched-off command "
+                       "replies that it is off", fill=DIM, anchor="w", font=FONT_SM)
+
+    def _activity_page(self, back=None):
+        w, cv, close = self._page("ACTIVITY", 330, back)
+        self._toggle_row(cv, 76, "a_on", "Track activity",
+                         "Which app and site is in front, minute by minute, and "
+                         "active vs idle. No keystrokes, screenshots or page "
+                         "contents. Stays on this laptop; deleted after %d days."
+                         % activity.KEEP_DAYS, activity.on(),
+                         lambda on: set_setting("activity", on))
+        self._toggle_row(cv, 166, "a_ci", "Morning check-in",
+                         "Yesterday in one toast, the first time after 8 AM",
+                         setting("checkin", True),
+                         lambda on: set_setting("checkin", on))
+        try:
+            days = activity._rows("SELECT COUNT(DISTINCT substr(minute,1,10)), "
+                                  "SUM(active) FROM activity")[0]
+        except Exception:
+            days = (0, 0)
+        note = cv.create_text(24, 236, text="Recorded: %d day%s, %d h active" % (
+            days[0] or 0, "" if days[0] == 1 else "s", (days[1] or 0) // 3600),
+            fill=DIM, anchor="w", font=FONT_SM)
+        cv.create_text(24, 262, text="Ask: what did I do today - when am I most "
+                       "productive - how long on youtube this week", fill=DIM,
+                       anchor="w", font=FONT_SM)
+
+        def wipe():
+            activity.wipe()
+            cv.itemconfig(note, text="Deleted - nothing recorded")
+        cv.create_window(self.W - 24, 302, anchor="e", window=self._button(
+            w, "Delete everything", wipe))
+
+    def _access_page(self, back=None):
+        H = 480
+        w, cv, close = self._page("SCREEN ACCESS", H, back)
+        opts = [("off", "Off", "No reading, typing, clicking or running."),
+                ("ask", "Ask", "Reads the window in front when you ask. Asks "
+                 "before every typing, clicking or command."),
+                ("full", "Full", "Reads and acts on its own for safe actions.")]
+        dots = {}
+
+        def pick(v):
+            access.set_level(v)
+            for k, dot in dots.items():
+                cv.itemconfig(dot, fill=ACCENT if k == v else PANEL)
+        y = 72
+        for v, label, desc in opts:
+            tag = "lv_" + v
+            cv.create_oval(24, y - 8, 40, y + 8, outline=DIM, width=1.5, tags=tag)
+            dots[v] = cv.create_oval(28, y - 4, 36, y + 4, outline="", tags=tag,
+                                     fill=ACCENT if access.level() == v else PANEL)
+            cv.create_text(52, y, text=label, fill=FG, anchor="w",
+                           font=FONT_BODY, tags=tag)
+            cv.create_text(52, y + 11, text=desc, fill=DIM, anchor="nw",
+                           font=FONT_SM, width=self.W - 90, tags=tag)
+            cv.tag_bind(tag, "<Button-1>", lambda e, v=v: pick(v))
+            cv.tag_bind(tag, "<Enter>", lambda e: cv.config(cursor="hand2"))
+            cv.tag_bind(tag, "<Leave>", lambda e: cv.config(cursor=""))
+            y += 54
+        cv.create_text(24, y, text="ALWAYS ASKS, EVEN ON FULL", fill=DIM,
+                       anchor="w", font=("Segoe UI", 8, "bold"))
+        cv.create_text(24, y + 12, anchor="nw", fill=FG, font=FONT_SM,
+                       width=self.W - 48, text=(
+                           "Running commands - Enter (it sends messages) - Delete "
+                           "- closing windows or tabs - typing a line break - "
+                           "buttons like Send, Delete, Pay, Buy, Install, Submit, "
+                           "Sign in, Discard, Close"))
+        y += 80
+        self._toggle_row(cv, y, "keep", "Keep Full after a restart",
+                         "Off: a restart drops Full back to Ask",
+                         setting("access_keep", False),
+                         lambda on: set_setting("access_keep", on))
+        y += 62
+        cv.create_text(24, y, anchor="w", fill=FG, font=FONT_SM,
+                       text="Panic key  Ctrl+Alt+Esc  - drops to Off and stops "
+                            "what it is doing")
+        cv.create_text(24, y + 20, anchor="w", fill=DIM, font=FONT_SM,
+                       text="An orange bar at the top shows whenever it reads "
+                            "or acts")
+
+        def show_log():
+            rows = access.recent()
+            text = "\n".join("%s  %-4s %-7s %s%s -> %s" % (
+                r[0][5:16].replace("T", " "), r[1], r[2], r[3][:30],
+                " (approved)" if r[4] else "", r[5][:40]) for r in rows)
+            self._answer_window("last %d actions" % len(rows),
+                                text or "nothing yet", title="LOG", limit=20000)
+        cv.create_window(self.W - 24, H - 24, anchor="e", window=self._button(
+            w, "Action log", show_log))
 
     def _answer_window(self, question, text, title="ANSWER", limit=4000):
         """A scrollable text panel. As ANSWER it names the model and offers
@@ -2771,7 +2903,9 @@ def tray_loop(bar):
                                wintypes.UINT]
 
     def on_message(hwnd, msg, wp, lp):
-        if msg == WM_HOTKEY:
+        if msg == WM_HOTKEY and wp == 2:
+            access.panic(bar)
+        elif msg == WM_HOTKEY:
             bar.root.after(0, bar.show)
         elif msg == WM_TRAY and lp in (WM_LBUTTONUP, WM_RBUTTONUP):
             if lp == WM_LBUTTONUP:
@@ -2833,6 +2967,10 @@ def tray_loop(bar):
 
     if not u32.RegisterHotKey(hwnd, 1, 0x0002 | 0x0001, 0x20):  # CTRL|ALT SPACE
         bar.root.after(0, lambda: bar.status("Ctrl+Alt+Space is taken"))
+    # Panic key for screen access: Ctrl+Alt+Esc.
+    if not u32.RegisterHotKey(hwnd, 2, 0x0002 | 0x0001, 0x1B):
+        bar.root.after(0, lambda: bar.status("Ctrl+Alt+Esc is taken - "
+                                             "the panic key won't work"))
 
     msg = wintypes.MSG()
     while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
@@ -2899,6 +3037,9 @@ if __name__ == "__main__":
     threading.Thread(target=hover.loop, args=(bar,), daemon=True).start()
     threading.Thread(target=focus.watch, args=(bar,), daemon=True).start()
     threading.Thread(target=tasks.watch, args=(bar,), daemon=True).start()
+    threading.Thread(target=activity.watch, args=(bar,), daemon=True).start()
+    threading.Thread(target=access.track, daemon=True).start()
+    access.on_start()
     soul.ensure()
     # Start hidden: it lives in the tray, and at login nothing should appear.
     if "--show" in sys.argv:

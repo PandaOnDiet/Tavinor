@@ -1427,7 +1427,82 @@ def check_voice_face():
     print("voice/face: %d checks passed" % n)
 
 
+def check_notes():
+    """Phase 9: notes, per-model vectors, and the fallback chain."""
+    import notes
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    cane.SETTINGS, notes.BOOK = tmp / "s.json", tmp / "book.json"
+    n = 0
+    real = (notes._provider, notes._ollama, notes._provider_model, cane.provider,
+            cane.key_get)
+    vec = lambda t: [1.0, 0.0] if "wifi" in t or "internet" in t else [0.0, 1.0]
+    calls = []
+    try:
+        cane.provider = lambda: "nvidia"
+        cane.key_get = lambda p: "k"
+        notes._provider_model = lambda p: "emb-1"
+        notes._provider = lambda p, m, texts, kind: calls.append("prov") or [
+            vec(t) for t in texts]
+        notes._ollama = lambda texts, kind: calls.append("olla") or [
+            vec(t) for t in texts]
+        notes.add("wifi password is on the fridge")
+        notes.add("spare key under the pot")
+        time.sleep(0.3)
+
+        hits, how = notes.search("internet login")
+        assert hits[0][1]["text"].startswith("wifi") and how == "", (hits, how)
+        assert "nvidia:emb-1" in notes.load()[0]["vec"]
+        n += 2
+
+        # Provider down: Ollama answers, and says so; vectors kept apart.
+        def down(*a):
+            raise OSError("timed out")
+        notes._provider = down
+        hits, how = notes.search("internet login")
+        assert hits[0][1]["text"].startswith("wifi") and "used ollama" in how, how
+        assert set(notes.load()[0]["vec"]) == {"nvidia:emb-1", "ollama:nomic-embed-text"}
+        n += 2
+
+        # Both down: plain words, and it says so.
+        notes._ollama = down
+        hits, how = notes.search("where is the spare key")
+        assert hits[0][1]["text"] == "spare key under the pot" and "words only" in how
+        n += 2
+
+        # "Only on this laptop" never calls the provider.
+        notes._ollama = lambda texts, kind: [vec(t) for t in texts]
+        calls.clear()
+        notes._provider = lambda *a: calls.append("prov") or [[0, 0]]
+        cane.set_setting("embed", "ollama")
+        notes.search("internet")
+        assert "prov" not in calls, calls
+        n += 1
+    finally:
+        (notes._provider, notes._ollama, notes._provider_model, cane.provider,
+         cane.key_get) = real
+
+    for text, want in [("note: wifi is on the fridge", ("add", "wifi is on the fridge")),
+                       ("jot down call ravi back", ("add", "call ravi back")),
+                       ("find note about the wifi", ("search", "the wifi")),
+                       ("what did i note about passwords", ("search", "passwords")),
+                       ("notes", ("list", None)), ("delete note 2", ("delete", "2"))]:
+        hit = cane.quick(text)
+        assert hit and hit["intent"] == "note" and hit["action"] == want[0], (text, hit)
+        if want[1]:
+            assert hit["arg"] == want[1], (text, hit)
+        n += 1
+    # Numbers follow the newest-first list.
+    assert notes.recent()[0]["text"] == "spare key under the pot"
+    assert notes.delete(1)["text"] == "spare key under the pot"
+    assert notes.delete(9) is None and len(notes.load()) == 1
+    n += 3
+    notes.BOOK.write_text("{bad json")
+    assert notes.load() == []
+    print("notes: %d checks passed" % (n + 1))
+
+
 if __name__ == "__main__":
+    check_notes()
     check_voice_face()
     check_activity()
     check_access()

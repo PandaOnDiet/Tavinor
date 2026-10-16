@@ -53,6 +53,7 @@ import access  # noqa: E402
 import activity  # noqa: E402
 import face  # noqa: E402
 import voice  # noqa: E402
+import notes  # noqa: E402
 
 MODEL =os.environ.get("CANE_MODEL", "qwen3:1.7b")
 # Runs on Ollama's servers through the same local API. Measured 1.5s and
@@ -425,6 +426,7 @@ FEATURES = [
     ("files", "File tasks", ("files", "undo")),
     ("focus", "Focus & blocking", ("focus", "block")),
     ("tasks", "Tasks & habits", ("task", "habit")),
+    ("notes", "Notes", ("note",)),
 ]
 
 
@@ -721,6 +723,10 @@ def quick(text):
 def _quick(text):
     t = re.sub(r"\s+", " ", text.lower()).strip(" ?.!")
     t = re.sub(r"^(please |can you |could you |cane,? )+", "", t)
+    # "note: X" (with the colon) goes to the notebook; "note that X" still
+    # saves an open item through the router, as before.
+    if re.match(r"note:", t):
+        return notes.quick(t)
     # A reminder ABOUT a command is not the command: "remind me to take a
     # screenshot at 5" must save a note, not take one now.
     if re.match(r"(remind|remember|note|don't forget|dont forget)\b", t):
@@ -738,7 +744,8 @@ def _quick(text):
     if re.fullmatch(r"(?:open |edit |show )?(?:cane'?s |my |your )?(?:personality|soul)"
                     r"(?: settings)?", t):
         return {"intent": "soul"}
-    hit = focus.quick(t) or tasks.quick(t) or activity.quick(t)
+    hit = (focus.quick(t) or tasks.quick(t) or activity.quick(t)
+           or notes.quick(t))
     if hit:
         return hit
 
@@ -1555,6 +1562,8 @@ def dispatch(intent, ui=None):
         return tasks.dispatch(intent, ui)
     if kind == "activity":
         return activity.dispatch(intent, ui)
+    if kind == "note":
+        return notes.dispatch(intent, ui)
     if kind == "screen":
         return access.dispatch(intent, ui)
 
@@ -1800,6 +1809,10 @@ def describe(it):
         return tasks.describe(it)
     if kind == "screen":
         return access.describe(it)
+    if kind == "note":
+        return {"add": "save a note", "search": "find notes about %s" % arg[:24],
+                "list": "show your notes",
+                "delete": "delete note %s" % arg}.get(act, "notes")
     if kind == "activity":
         return {"today": "show what you did today", "yesterday": "show yesterday",
                 "productive": "show your best hours"}.get(
@@ -2599,6 +2612,10 @@ class Bar:
             ("Activity", "%s - what you use, minute by minute"
              % ("On" if activity.on() else "Off"),
              lambda back: self._activity_page(back)),
+            ("Notes", "search by meaning: %s"
+             % ("on this laptop" if notes.source() == "ollama" else
+                "your provider, then this laptop"),
+             lambda back: self._notes_page(back)),
             ("Features", "switch single commands on or off",
              lambda back: self._features_page(back)),
             ("Chat", "tasks done by your answer provider",
@@ -2697,6 +2714,25 @@ class Bar:
                          (tag,))
         cv.create_text(24, 72 + 32 * rows + 30, text="A switched-off command "
                        "replies that it is off", fill=DIM, anchor="w", font=FONT_SM)
+
+    def _notes_page(self, back=None):
+        H = 300
+        w, cv, close = self._page("NOTES", H, back)
+        cv.create_text(24, 66, anchor="w", fill=FG, font=FONT_BODY,
+                       text="Finding notes by meaning uses an embedding model")
+        self._toggle_row(cv, 110, "n_src", "Only on this laptop",
+                         "On: Ollama's nomic-embed-text, nothing leaves the laptop. "
+                         "Off: your answer provider's embedding model first (note "
+                         "text is sent to it), Ollama if that fails",
+                         notes.source() == "ollama",
+                         lambda on: set_setting("embed", "ollama" if on else "provider"))
+        used = sorted({k for r in notes.load() for k in r["vec"]})
+        cv.create_text(24, 200, anchor="nw", fill=DIM, font=FONT_SM,
+                       width=self.W - 48,
+                       text="%d notes. Indexed with: %s" % (
+                           len(notes.load()), ", ".join(used) or "nothing yet"))
+        cv.create_text(24, 244, anchor="w", fill=DIM, font=FONT_SM,
+                       text="Say: note: ...  ·  find note about ...  ·  notes")
 
     def _voice_page(self, back=None):
         H = 400

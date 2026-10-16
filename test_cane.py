@@ -1645,7 +1645,80 @@ def check_gcal():
     print("calendar: %d checks passed" % n)
 
 
+def check_mcp():
+    """Phase 12: MCP protocol, approval gate, token check."""
+    import mcp_server
+    import bridge
+    import urllib.request as ur
+    n = 0
+    r = mcp_server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                           "params": {"protocolVersion": "2025-06-18"}})
+    assert r["result"]["protocolVersion"] == "2025-06-18"
+    assert r["result"]["capabilities"] == {"tools": {}}
+    r = mcp_server.handle({"jsonrpc": "2.0", "id": 2, "method": "initialize",
+                           "params": {"protocolVersion": "1999-01-01"}})
+    assert r["result"]["protocolVersion"] == mcp_server.VERSIONS[0]
+    assert mcp_server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
+    names = {t["name"] for t in mcp_server.handle(
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/list"})["result"]["tools"]}
+    assert names == {"get_day", "search_notes", "add_task", "add_note",
+                     "start_focus", "animate_face"}
+    assert mcp_server.handle({"jsonrpc": "2.0", "id": 4, "method": "nope"})["error"]
+    assert mcp_server.handle({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+                              "params": {"name": "rm_rf"}})["error"]
+    n += 6
+
+    # No Cane running: tools say so instead of acting.
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    mcp_server.BRIDGE = tmp / "missing.json"
+    r = mcp_server.handle({"jsonrpc": "2.0", "id": 6, "method": "tools/call",
+                           "params": {"name": "get_day", "arguments": {}}})
+    assert r["result"]["isError"] and "isn't running" in r["result"]["content"][0]["text"]
+    n += 1
+
+    # Writes need approval; reads and the face don't.
+    ran = []
+    real_run = bridge.run
+    bridge.run = lambda tool, args: ran.append(tool) or "ok"
+    try:
+        assert bridge.call("add_task", {"text": "x"}, lambda l: False) == (
+            False, "declined by the user in Cane") and ran == []
+        ok, text = bridge.call("add_task", {"text": "x"}, lambda l: True)
+        assert ok and text.startswith("approved by the user in Cane") and ran == ["add_task"]
+        assert bridge.call("get_day", {}, lambda l: False) == (True, "ok")
+        faces = []
+        assert bridge.call("animate_face", {"state": "done"}, lambda l: False,
+                           face=faces.append)[0] and faces == ["done"]
+        assert not bridge.call("delete_everything", {}, lambda l: True)[0]
+        n += 5
+
+        # Over HTTP: the right token works, a wrong one is refused.
+        bridge.FILE = tmp / "bridge.json"
+        srv = bridge.serve(lambda l: True)
+        info = json.loads(bridge.FILE.read_text())
+        try:
+            for token, want in ((info["token"], 200), ("guess", 403)):
+                req = ur.Request("http://127.0.0.1:%d/" % info["port"],
+                                 json.dumps({"tool": "get_day"}).encode(),
+                                 {"X-Cane-Token": token})
+                try:
+                    code = ur.urlopen(req, timeout=5).status
+                except Exception as e:
+                    code = getattr(e, "code", 0)
+                assert code == want, (token, code)
+                n += 1
+            mcp_server.BRIDGE = bridge.FILE
+            assert mcp_server.forward("get_day", {}) == (True, "ok")
+            n += 1
+        finally:
+            srv.shutdown()
+    finally:
+        bridge.run = real_run
+    print("mcp: %d checks passed" % n)
+
+
 if __name__ == "__main__":
+    check_mcp()
     check_gcal()
     check_notes()
     check_voice_face()

@@ -55,6 +55,7 @@ import face  # noqa: E402
 import voice  # noqa: E402
 import notes  # noqa: E402
 import gcal  # noqa: E402
+import bridge  # noqa: E402
 
 MODEL =os.environ.get("CANE_MODEL", "qwen3:1.7b")
 # Runs on Ollama's servers through the same local API. Measured 1.5s and
@@ -3229,6 +3230,7 @@ if __name__ == "__main__":
     access.on_start()
     threading.Thread(target=voice.Wake(bar).loop, daemon=True).start()
     threading.Thread(target=gcal.reminders, args=(bar,), daemon=True).start()
+    bridge.serve(bridge.approver(bar), face=bar.set_face)   # for mcp_server.py
     soul.ensure()
     # Start hidden: it lives in the tray, and at login nothing should appear.
     if "--show" in sys.argv:

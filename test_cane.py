@@ -1354,7 +1354,81 @@ def check_access():
     print("access: %d checks passed" % (n + 2))
 
 
+def check_voice_face():
+    """Phases 8 and 11: wake parsing, speech text, mic gating, face states."""
+    import voice
+    import access
+    import face
+    import tkinter as tk
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    cane.SETTINGS = tmp / "s.json"
+    n = 0
+    # Wake word: real transcripts from testing, including near misses.
+    for text, want in [("Hey Cane, open Chrome.", (True, "open chrome")),
+                       ("Hey Kane what time is it", (True, "what time is it")),
+                       ("Hi Cain", (True, "")),
+                       ("Okay, cancel that.", (False, "")),        # woke it once
+                       ("Hey can you help me", (False, "")),
+                       ("hey candle shop", (False, "")),
+                       ("A cane.", (False, "")),
+                       ("I can open Croat", (False, "")),
+                       ("", (False, ""))]:
+        assert voice.parse_wake(text, "cane") == want, (text, voice.parse_wake(text, "cane"))
+        n += 1
+    assert voice.parse_wake("Hey Wren, lock it", "wren") == (True, "lock it")
+    n += 1
+
+    # What gets said aloud: no code, no fallback note.
+    said = voice.clean_for_speech("(could not reach NVIDIA - answered by x)\nRun "
+                                  "`ls` then:\n```\nrm -rf /\n```\ndone")
+    assert said == "Run ls then: (code shown on screen) done", said
+    n += 1
+
+    # Ears follow Screen access; the engine follows its setting.
+    access.set_level("off")
+    assert not voice.ears_allowed()
+    access.set_level("ask")
+    assert voice.ears_allowed()
+    cane.set_setting("stt", "windows")
+    assert voice.engine() == "windows"
+    n += 3
+
+    # Push to talk at Off says so instead of listening.
+    access.set_level("off")
+    seen = []
+
+    class Bar:
+        class root:
+            after = staticmethod(lambda ms, f=None: f and f())
+        show = staticmethod(lambda: None)
+        status = staticmethod(lambda m, keep=False: seen.append(m))
+    voice.push_to_talk(Bar)
+    assert seen and "microphone is off" in seen[0], seen
+    access.set_level("ask")
+    n += 1
+
+    # Every face state draws, and done/error settle back.
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        cv = tk.Canvas(root, width=100, height=100)
+        f = face.Face(cv)
+        for s in face.STATES:
+            f.set(s)
+            assert cv.find_withtag("face"), s
+            n += 1
+        f.draw("idle", blink=True)
+        cane.set_setting("face", False)
+        f.draw("idle")
+        assert cv.itemcget(cv.find_withtag("face")[0], "text") == "›"
+        n += 1
+    finally:
+        root.destroy()
+    print("voice/face: %d checks passed" % n)
+
+
 if __name__ == "__main__":
+    check_voice_face()
     check_activity()
     check_access()
     check_tasks()

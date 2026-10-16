@@ -459,10 +459,13 @@ def indicator(ui, what):
         w.geometry("+%d+0" % x)
         box["w"] = w
     ui.root.after(0, make)
+    ui.set_face("eyes")
 
     def done():
         wait = max(0, 0.8 - (time.monotonic() - started))
         ui.root.after(int(wait * 1000), lambda: box.get("w") and box["w"].destroy())
+        import face
+        ui.set_face(face.resting())
     return done
 
 

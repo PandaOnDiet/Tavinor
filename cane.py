@@ -51,6 +51,8 @@ import soul  # noqa: E402
 import tasks  # noqa: E402
 import access  # noqa: E402
 import activity  # noqa: E402
+import face  # noqa: E402
+import voice  # noqa: E402
 
 MODEL =os.environ.get("CANE_MODEL", "qwen3:1.7b")
 # Runs on Ollama's servers through the same local API. Measured 1.5s and
@@ -1664,6 +1666,7 @@ def dispatch(intent, ui=None):
         if ui:
             ui.remember_turn(arg, text)
             ui.show_answer(arg, text)
+            voice.maybe_speak(text)
             return "answered" if not text.startswith("Couldn't") else text[:60]
         return text
 
@@ -1855,6 +1858,8 @@ def run(text, ui, item=None):
     no parsing and must not be re-guessed.
     """
     try:
+        if hasattr(ui, "set_face"):
+            ui.set_face("thinking")
         item = item or parse(text)
         ui.status(dispatch(item, ui),
                   keep=item.get("intent") not in HIDE_AFTER)
@@ -1976,13 +1981,19 @@ class Bar:
         cv = make_panel(self.root, self.W, self.H + 10 + self.ROW * self.ROWS,
                         rect_h=self.H)
 
-        cv.create_text(30, 42, text="\u203a", fill=ACCENT, anchor="w",
-                       font=("Segoe UI", 24, "bold"))
+        self.face = face.Face(cv)
         self.entry = tk.Entry(self.root, font=FONT_IN, bg=PANEL, fg=FG,
                               insertbackground=ACCENT, relief="flat",
                               highlightthickness=0, borderwidth=0)
         cv.create_window(52, 42, window=self.entry, anchor="w",
-                         width=self.W - 110, height=32)
+                         width=self.W - 140, height=32)
+        mic = cv.create_text(self.W - 70, 42, text="\uE720", fill=DIM,
+                             font=("Segoe MDL2 Assets", 14), tags="mic")
+        cv.tag_bind("mic", "<Enter>", lambda e: (cv.itemconfig(mic, fill=ACCENT),
+                                                 cv.config(cursor="hand2")))
+        cv.tag_bind("mic", "<Leave>", lambda e: (cv.itemconfig(mic, fill=DIM),
+                                                 cv.config(cursor="")))
+        cv.tag_bind("mic", "<Button-1>", lambda e: voice.push_to_talk(self))
         gear = cv.create_text(self.W - 34, 42, text="⚙", fill=DIM,
                               font=("Segoe UI Symbol", 16), tags="gear")
         cv.tag_bind("gear", "<Enter>", lambda e: (cv.itemconfig(gear, fill=ACCENT),
@@ -2145,6 +2156,9 @@ class Bar:
         so the next command needs no second trip through the hotkey."""
         def put():
             self.label.config(text=msg)
+            self.face.set("error" if re.match(r"(error|couldn'?t|could not|"
+                                              r"failed|model offline)", msg)
+                          else "done")
             if keep:
                 self.entry.delete(0, "end")
                 self._draw_rows([])
@@ -2155,6 +2169,10 @@ class Bar:
         self.root.after(0, put)
         if not keep:
             self.root.after(2500, self.hide)   # long enough to read the hint
+
+    def set_face(self, state):
+        """Thread-safe: the face changes on the UI thread."""
+        self.root.after(0, lambda: self.face.set(state))
 
     def submit(self, _):
         if self.rows:                    # Enter takes the highlighted row
@@ -2558,6 +2576,10 @@ class Bar:
              "Never over full-screen apps",
              setting("hover", True),
              lambda on: set_setting("hover", on)),
+            ("Face on the bar", "Shows what it's doing - listening, thinking, "
+             "focus. Off: the plain arrow",
+             setting("face", True),
+             lambda on: (set_setting("face", on), self.face.draw(face.resting()))),
             # Tasks are always done in Cane's chat. This only adds a button
             # there - nothing is ever handed to Claude Code automatically.
             ("Claude Code button in chat", "Adds \"Hand to Claude Code\" to the "
@@ -2570,6 +2592,8 @@ class Bar:
              lambda back: soul.open_window(self, back=back)),
             ("Blocked sites", "what focus mode closes, and when",
              lambda back: focus.sites_window(self, back=back)),
+            ("Voice", "push to talk, read aloud, \"Hey %s\""
+             % soul.name(), lambda back: self._voice_page(back)),
             ("Screen access", "%s - what it may read, type and click"
              % access.level().title(), lambda back: self._access_page(back)),
             ("Activity", "%s - what you use, minute by minute"
@@ -2673,6 +2697,43 @@ class Bar:
                          (tag,))
         cv.create_text(24, 72 + 32 * rows + 30, text="A switched-off command "
                        "replies that it is off", fill=DIM, anchor="w", font=FONT_SM)
+
+    def _voice_page(self, back=None):
+        H = 400
+        w, cv, close = self._page("VOICE", H, back)
+        cv.create_text(24, 66, anchor="w", fill=FG, font=FONT_BODY,
+                       text="Push to talk: Ctrl+Alt+V, or the mic on the bar")
+        self._toggle_row(cv, 106, "v_wake", "Wake word: \"Hey %s\"" % soul.name(),
+                         "Off by default. Listens on this laptop only and sends "
+                         "nothing. Each phrase it hears costs ~2 s of CPU while on. "
+                         "Renaming the personality renames the wake word",
+                         setting("wake", False), lambda on: set_setting("wake", on))
+        self._toggle_row(cv, 186, "v_say", "Read answers aloud",
+                         "Answers and chat replies; code is left out",
+                         setting("speak", False), lambda on: set_setting("speak", on))
+        self._toggle_row(cv, 246, "v_stt", "Use Whisper for speech to text",
+                         "Accurate, ~2 s. Off: Windows' own, instant but it got "
+                         "4 of 6 test commands wrong", voice.engine() == "whisper",
+                         lambda on: set_setting("stt", "whisper" if on else "windows"))
+        cv.create_text(24, 318, anchor="w", fill=DIM, font=FONT_SM,
+                       text="The microphone follows Screen access: at Off nothing "
+                            "listens")
+        note = cv.create_text(24, H - 24, text="", fill=DIM, anchor="w",
+                              font=FONT_SM, width=self.W - 170)
+
+        def test():
+            if not voice.ears_allowed():
+                cv.itemconfig(note, text="Screen access is Off - the mic is off")
+                return
+            cv.itemconfig(note, text="listening… say something")
+
+            def go():
+                text, _ = voice.listen_once()
+                self.root.after(0, lambda: cv.itemconfig(
+                    note, text=("heard: " + text) if text else "heard nothing"))
+            threading.Thread(target=go, daemon=True).start()
+        cv.create_window(self.W - 24, H - 24, anchor="e", window=self._button(
+            w, "Test microphone", test))
 
     def _activity_page(self, back=None):
         w, cv, close = self._page("ACTIVITY", 330, back)
@@ -2905,6 +2966,8 @@ def tray_loop(bar):
     def on_message(hwnd, msg, wp, lp):
         if msg == WM_HOTKEY and wp == 2:
             access.panic(bar)
+        elif msg == WM_HOTKEY and wp == 3:
+            voice.push_to_talk(bar)
         elif msg == WM_HOTKEY:
             bar.root.after(0, bar.show)
         elif msg == WM_TRAY and lp in (WM_LBUTTONUP, WM_RBUTTONUP):
@@ -2967,6 +3030,9 @@ def tray_loop(bar):
 
     if not u32.RegisterHotKey(hwnd, 1, 0x0002 | 0x0001, 0x20):  # CTRL|ALT SPACE
         bar.root.after(0, lambda: bar.status("Ctrl+Alt+Space is taken"))
+    if not u32.RegisterHotKey(hwnd, 3, 0x0002 | 0x0001, 0x56):   # Ctrl+Alt+V
+        bar.root.after(0, lambda: bar.status("Ctrl+Alt+V is taken - use the "
+                                             "mic on the bar to talk"))
     # Panic key for screen access: Ctrl+Alt+Esc.
     if not u32.RegisterHotKey(hwnd, 2, 0x0002 | 0x0001, 0x1B):
         bar.root.after(0, lambda: bar.status("Ctrl+Alt+Esc is taken - "
@@ -3040,6 +3106,7 @@ if __name__ == "__main__":
     threading.Thread(target=activity.watch, args=(bar,), daemon=True).start()
     threading.Thread(target=access.track, daemon=True).start()
     access.on_start()
+    threading.Thread(target=voice.Wake(bar).loop, daemon=True).start()
     soul.ensure()
     # Start hidden: it lives in the tray, and at login nothing should appear.
     if "--show" in sys.argv:

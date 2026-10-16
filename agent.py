@@ -400,6 +400,9 @@ def _window(bar, first=None, back=None):
 
     def ui_put(kind, t):
         w.after(0, lambda: put(kind, t))
+        if kind == "say":
+            import voice
+            voice.maybe_speak(t)
 
     def approve(actions):
         """Blocks the worker until a button is pressed."""

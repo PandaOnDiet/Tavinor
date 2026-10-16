@@ -48,6 +48,7 @@ import agent  # noqa: E402  (after the alias, on purpose)
 import focus  # noqa: E402
 import hover  # noqa: E402
 import soul  # noqa: E402
+import tasks  # noqa: E402
 
 MODEL =os.environ.get("CANE_MODEL", "qwen3:1.7b")
 # Runs on Ollama's servers through the same local API. Measured 1.5s and
@@ -198,13 +199,23 @@ def load():
     for r in raw:
         if not isinstance(r, dict) or not r.get("text"):
             continue
-        items.append({
+        item = {
             "text": str(r["text"]),
             "due": r.get("due") if isinstance(r.get("due"), str) else None,
             "done": bool(r.get("done")),
             "fired": bool(r.get("fired")),
             "created": str(r.get("created", "")),
-        })
+        }
+        # Task fields (tasks.py). Kept only when well-formed - the old code
+        # rebuilt every row from the five fields above, so anything else was
+        # silently dropped on the next save.
+        for k in ("id", "parent"):
+            if isinstance(r.get(k), str) and r[k]:
+                item[k] = r[k]
+        for k in ("apps", "links"):
+            if isinstance(r.get(k), list):
+                item[k] = [str(x) for x in r[k] if str(x).strip()]
+        items.append(item)
     return items
 
 
@@ -212,18 +223,40 @@ def save(items):
     STORE.write_text(json.dumps(items, indent=2), encoding="utf-8")
 
 
-def add_note(text, due=None):
+def add_note(text, due=None, parent=None):
+    """`parent`: the item this is a subtask of. A subtask goes right after
+    its parent's last subtask, so the numbered list shows it underneath -
+    and "mark 3 done" still means the third row you see."""
     with _LOCK:
         items = load()
-        items.append({
+        item = {
             "text": text,
             "due": due.isoformat(timespec="minutes") if due else None,
             "done": False,
             "fired": False,
             "created": datetime.now().isoformat(timespec="minutes"),
-        })
+            "id": uuid.uuid4().hex[:8],
+        }
+        at = len(items)
+        if parent is not None:
+            # `parent` came from another load(), so find its row again: by
+            # id, or - for rows saved before ids existed - text and created.
+            pid = parent.get("id")
+            k_par = next((k for k, i in enumerate(items)
+                          if (pid and i.get("id") == pid)
+                          or (i["text"] == parent["text"]
+                              and i["created"] == parent["created"])), None)
+            if k_par is None:
+                raise ValueError("that item is gone")
+            pid = items[k_par].setdefault("id", uuid.uuid4().hex[:8])
+            item["parent"] = pid
+            at = k_par + 1
+            for k in range(k_par + 1, len(items)):
+                if items[k].get("parent") == pid:
+                    at = k + 1
+        items.insert(at, item)
         save(items)
-        return items[-1]
+        return item
 
 
 def open_items():
@@ -241,15 +274,7 @@ def mark_done(ref):
         return None
     with _LOCK:
         items = load()
-        live = [i for i in items if not i["done"]]
-        hit = None
-        if ref.isdigit():
-            n = int(ref) - 1
-            if 0 <= n < len(live):
-                hit = live[n]
-        else:
-            needle = ref.lower()
-            hit = next((i for i in live if needle in i["text"].lower()), None)
+        hit = pick_item([i for i in items if not i["done"]], ref)
         if hit is None:
             return None
         hit["done"] = True
@@ -257,9 +282,24 @@ def mark_done(ref):
         return hit
 
 
+def pick_item(live, ref):
+    """The open item `ref` names: a 1-based number from the list, or words
+    in its text. Empty matches nothing (see mark_done)."""
+    ref = (ref or "").strip()
+    if not ref:
+        return None
+    if ref.isdigit():
+        n = int(ref) - 1
+        return live[n] if 0 <= n < len(live) else None
+    needle = ref.lower()
+    return next((i for i in live if needle in i["text"].lower()), None)
+
+
 # ---------------------------------------------------------------- time
 
 UNITS = {"min": 1, "hour": 60, "day": 1440, "week": 10080}
+WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+            "sunday"]
 
 
 def parse_when(phrase, now=None):
@@ -282,10 +322,19 @@ def parse_when(phrase, now=None):
             return None
         return now + timedelta(minutes=minutes)
 
-    # A clock time, optionally on tomorrow.
+    # A weekday: the next one ("friday" on a Monday is in four days).
+    wd = re.search(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|"
+                   r"sunday)\b", p)
+    day = None
+    if wd:
+        target = WEEKDAYS.index(wd.group(1))
+        day = now + timedelta(days=(target - now.weekday()) % 7)
+
+    # A clock time, optionally on tomorrow or a weekday.
     m = re.search(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", p)
-    if m and ("at" in p or "tomorrow" in p or "tonight" in p):
-        base = now + timedelta(days=1) if "tomorrow" in p else now
+    if m and ("at" in p or "tomorrow" in p or "tonight" in p or day):
+        base = (day if day else
+                now + timedelta(days=1) if "tomorrow" in p else now)
         hour, minute = int(m.group(1)), int(m.group(2) or 0)
         if m.group(3) == "pm" and hour < 12:
             hour += 12
@@ -296,8 +345,13 @@ def parse_when(phrase, now=None):
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             return None
         due = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        return due + timedelta(days=1) if due <= now else due
+        if due <= now:
+            due += timedelta(days=7 if day else 1)
+        return due
 
+    if day:
+        due = day.replace(hour=9, minute=0, second=0, microsecond=0)
+        return due + timedelta(days=7) if due <= now else due
     if "tonight" in p:
         return now.replace(hour=20, minute=0, second=0, microsecond=0)
     if "tomorrow" in p:
@@ -366,6 +420,7 @@ FEATURES = [
     ("reminders", "Reminders", ("remember", "remind", "recall", "done")),
     ("files", "File tasks", ("files", "undo")),
     ("focus", "Focus & blocking", ("focus", "block")),
+    ("tasks", "Tasks & habits", ("task", "habit")),
 ]
 
 
@@ -679,7 +734,7 @@ def _quick(text):
     if re.fullmatch(r"(?:open |edit |show )?(?:cane'?s |my |your )?(?:personality|soul)"
                     r"(?: settings)?", t):
         return {"intent": "soul"}
-    hit = focus.quick(t)
+    hit = focus.quick(t) or tasks.quick(t)
     if hit:
         return hit
 
@@ -1492,6 +1547,8 @@ def dispatch(intent, ui=None):
 
     if kind in ("focus", "block"):
         return focus.dispatch(intent, ui)
+    if kind in ("task", "habit"):
+        return tasks.dispatch(intent, ui)
 
     if kind == "soul":
         if ui:
@@ -1730,6 +1787,8 @@ def describe(it):
         return "ask Copilot “%s”" % arg[:28]
     if kind == "remind":
         return "remind you: %s" % arg[:32]
+    if kind in ("task", "habit"):
+        return tasks.describe(it)
     if kind == "focus":
         if act == "start":
             return "focus %s min%s" % (it.get("minutes"), " on " + arg[:28]
@@ -2143,7 +2202,12 @@ class Bar:
             due = ""
             if i["due"]:
                 due = "   " + datetime.fromisoformat(i["due"]).strftime("%a %H:%M")
-            rows.append((str(n), i["text"], due))
+            # Subtasks sit under their parent (add_note keeps them adjacent),
+            # and ⧉ marks a task that has a workspace to open.
+            text = ("↳ " if i.get("parent") else "") + i["text"]
+            if i.get("apps") or i.get("links"):
+                text += "  ⧉"
+            rows.append((str(n), text, due))
         h = max(64, 46 + 24 * len(rows))
         w, cv, close = self._toast(h)
         self._close_list = close
@@ -2834,6 +2898,7 @@ if __name__ == "__main__":
     threading.Thread(target=index_apps, daemon=True).start()
     threading.Thread(target=hover.loop, args=(bar,), daemon=True).start()
     threading.Thread(target=focus.watch, args=(bar,), daemon=True).start()
+    threading.Thread(target=tasks.watch, args=(bar,), daemon=True).start()
     soul.ensure()
     # Start hidden: it lives in the tray, and at login nothing should appear.
     if "--show" in sys.argv:

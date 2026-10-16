@@ -288,6 +288,28 @@ title parts: "Lofi - YouTube" is YouTube, "Song - YouTube Music" and "Notes
 about YouTube - Google Docs" are not. A session that ends while Cane isn't
 running is recorded as abandoned. State lives in `focus.json`.
 
+## Tasks and habits
+
+Tasks are the same open items as before (`what's left` lists them), with
+extras that old items don't need:
+
+| Say | Does |
+|---|---|
+| `task: file taxes due friday at 5pm` / `add task call mom tomorrow` | a task; the due time also pops up as a reminder |
+| `subtask gather receipts to file taxes` | a subtask, listed under its task with ↳ |
+| `workspace for file taxes: excel, chrome, https://incometax.gov.in` | what the task opens (⧉ in the list) |
+| `start task file taxes` / `work on taxes` | opens those apps and links |
+| `habit: drink water daily at 6pm` / `new habit stretch on weekdays` | a habit with a daily nudge (8pm if no time) |
+| `did drink water` · `habits` · `drop habit stretch` | check in, streaks, stop (history kept) |
+
+Task commands need `task:`, `add task` or `new task`, so `task manager` and
+`open task manager` keep their old meaning. `did X` / `done X` checks in a
+habit only when X names one; `done 2` still closes item 2. A streak counts
+scheduled days only, so a weekday habit survives the weekend, and today
+doesn't break it until the day is over. Weekdays now work in every time
+phrase: `friday`, `monday at 5pm` - the next one, at 9:00 when no time is
+given. Habits live in `habits.json`.
+
 ## Reminders
 
 Times understood: `in 20 minutes`, `in 2 hours`, `in 3 days`, `at 3pm`,

@@ -1071,7 +1071,111 @@ def check_render():
     print("render: 3 checks passed")
 
 
+def check_tasks():
+    """Phase 5: due dates, subtasks, workspaces, habits."""
+    import tasks
+    import webbrowser
+    from datetime import date
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    cane.STORE, tasks.HABITS = tmp / "notes.json", tmp / "habits.json"
+    cane.SETTINGS = tmp / "s.json"
+    n = 0
+
+    # Weekdays. NOW is Monday 14:00.
+    for phrase, want in [("friday", "2026-09-11 09:00"),
+                         ("friday at 3pm", "2026-09-11 15:00"),
+                         ("monday", "2026-09-14 09:00"),         # today's 9am passed
+                         ("monday at 5pm", "2026-09-07 17:00"),   # later today
+                         ("on saturday at 10am", "2026-09-12 10:00"),
+                         ("tomorrow at 9am", "2026-09-08 09:00")]:
+        got = cane.parse_when(phrase, now=NOW).strftime("%Y-%m-%d %H:%M")
+        assert got == want, (phrase, got, want)
+        n += 1
+
+    # An item saved before tasks existed keeps working and gains subtasks.
+    cane.STORE.write_text(json.dumps([
+        {"text": "send invoice", "due": None, "done": False, "fired": False,
+         "created": "2026-09-01T10:00"},
+        {"text": "call ravi", "due": None, "done": False, "fired": False,
+         "created": "2026-09-01T11:00"},
+        {"text": "bad extras", "apps": "notalist", "parent": 7, "created": "x"}]))
+    assert [i["text"] for i in cane.open_items()] == ["send invoice", "call ravi",
+                                                      "bad extras"]
+    assert "apps" not in cane.load()[2] and "parent" not in cane.load()[2]
+    out = cane.dispatch(cane.quick("subtask draft the email to send invoice"))
+    assert out == "subtask of send invoice: draft the email", out
+    cane.dispatch(cane.quick("subtask attach pdf under invoice"))
+    rows = cane.open_items()
+    assert [i["text"] for i in rows] == ["send invoice", "draft the email",
+                                         "attach pdf", "call ravi", "bad extras"]
+    assert rows[1]["parent"] == rows[0]["id"] == rows[2]["parent"]
+    assert cane.mark_done("3")["text"] == "attach pdf", "numbering drifted"
+    n += 5
+
+    # Tasks with due dates; a date it can't read is said, not guessed.
+    out = cane.dispatch(cane.quick("task: file taxes due friday at 5pm"))
+    assert out.startswith("task: file taxes, due Fri"), out
+    out = cane.dispatch(cane.quick("add task water plants by someday"))
+    assert out.startswith("task saved (couldn't read"), out
+    n += 2
+
+    # Workspaces: set, then open through the normal launch path.
+    out = cane.dispatch(cane.quick("workspace for file taxes: excel, chrome and "
+                                   "https://incometax.gov.in"))
+    assert out == "file taxes opens: chrome, excel, https://incometax.gov.in", out
+    launched, browsed = [], []
+    real_dispatch, real_open = tasks.cane.dispatch, webbrowser.open
+    try:
+        tasks.cane.dispatch = lambda it, ui=None: launched.append(it["arg"]) or (
+            "opened: x" if it["arg"] == "excel" else "nothing called 'chrome'")
+        webbrowser.open = browsed.append
+        out = tasks.start("taxes")
+    finally:
+        tasks.cane.dispatch, webbrowser.open = real_dispatch, real_open
+    assert launched == ["chrome", "excel"] and browsed == ["https://incometax.gov.in"]
+    assert out == "opened 2 for file taxes (couldn't open chrome)", out
+    assert cane.dispatch(cane.quick("start task call ravi")).startswith(
+        "call ravi has no workspace yet")
+    n += 4
+
+    # Habits: add, check in once a day, streaks over scheduled days only.
+    out = cane.dispatch(cane.quick("habit: drink water daily at 6pm"))
+    assert out == "habit: drink water, daily, nudge at 18:00", out
+    cane.dispatch(cane.quick("new habit stretch on weekdays"))
+    out = cane.dispatch(cane.quick("did drink water"))
+    assert out.startswith("drink water done - 1-day streak"), out
+    assert "already done today" in cane.dispatch(cane.quick("done drink water"))
+    h = {"every": "weekdays", "checkins": ["2026-10-15", "2026-10-16"]}  # Thu, Fri
+    assert tasks.streak(h, today=date(2026, 10, 19)) == 2   # Mon: weekend skipped
+    h = {"every": "daily", "checkins": ["2026-10-15", "2026-10-16"]}
+    assert tasks.streak(h, today=date(2026, 10, 17)) == 2   # today not done yet
+    assert tasks.streak(h, today=date(2026, 10, 18)) == 0   # a day was missed
+    n += 7
+
+    # Nudges: after the time, once a day, never once done or archived.
+    tasks.save_habits([{"name": "read", "every": "daily", "at": "20:00",
+                        "checkins": [], "archived": False, "nudged": "",
+                        "created": ""}])
+    eve = datetime(2026, 10, 16, 19, 59)
+    assert tasks.nudges(eve) == []
+    assert [h["name"] for h in tasks.nudges(eve.replace(hour=20, minute=1))] == ["read"]
+    assert tasks.nudges(eve.replace(hour=21)) == [], "nudged twice in a day"
+    assert cane.dispatch(cane.quick("drop habit read")) == "stopped read (history kept)"
+    assert tasks.load_habits()[0]["archived"] is True
+    n += 5
+
+    # Words that must keep their old meaning.
+    for text, want in [("open task manager", "launch"), ("task manager", None),
+                       ("done 2", None), ("did i lock the door", None),
+                       ("tasks", "recall"), ("what's left", None)]:
+        hit = cane.quick(text)
+        assert (hit and hit["intent"]) == want, (text, hit)
+        n += 1
+    print("tasks: %d checks passed" % n)
+
+
 if __name__ == "__main__":
+    check_tasks()
     check_render()
     check_agent()
     check_hover()

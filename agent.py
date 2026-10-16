@@ -179,7 +179,8 @@ def clean(a):
     """Model-written values into the shapes dispatch() expects."""
     kind = a["intent"]
     out = {"intent": kind}
-    for k in ("arg", "action", "when", "minutes", "site", "from", "to", "days"):
+    for k in ("arg", "action", "when", "minutes", "site", "from", "to", "days",
+              "parent", "apps", "every", "at"):
         if a.get(k) not in (None, ""):
             out[k] = str(a[k]).strip()
     if kind in ("volume", "brightness") and "arg" in out:

@@ -276,11 +276,12 @@ def converse(text, ui=None, show=None, approve=None, propose=None,
 
 # ------------------------------------------------------------- window
 
-def open_window(bar, first=None):
-    bar.root.after(0, lambda: _window(bar, first))
+def open_window(bar, first=None, back=None):
+    """`first`: a message to send at once. `back`: reopen Settings."""
+    bar.root.after(0, lambda: _window(bar, first, back))
 
 
-def _window(bar, first=None):
+def _window(bar, first=None, back=None):
     import tkinter as tk
     from cane import PANEL, FG, DIM, ACCENT, FONT_BODY, FONT_SM, MARGIN
 
@@ -297,7 +298,7 @@ def _window(bar, first=None):
     w = tk.Toplevel(bar.root)
     cv = cane.make_panel(w, W, H)
     x0 = bar._x()
-    y0 = MARGIN + bar._bar_h() + 12 if bar.root.winfo_viewable() else MARGIN
+    y0 = MARGIN          # the bar hides as the chat opens; don't leave a gap
     w.geometry("+%d+%d" % (x0 + 40, y0))
     state = {"win": w, "busy": False}
     bar._chat = state
@@ -306,15 +307,10 @@ def _window(bar, first=None):
         bar._chat = None
         cane.slide(w, x0 + 40, y0, 0.0, steps=8, then=w.destroy)
 
-    cv.create_text(24, 26, text="CHAT", fill=ACCENT, anchor="w",
-                   font=("Segoe UI", 8, "bold"))
-    cv.create_text(70, 26, text=soul_name(), fill=FG, anchor="w", font=FONT_SM)
-    model = cv.create_text(W - 60, 26, text=cane.current_model(), fill=DIM,
+    bar.page_header(w, cv, "CHAT · " + soul_name().upper(), close,
+                    back and (lambda: (close(), back())))
+    model = cv.create_text(W - 60, 28, text=cane.current_model(), fill=DIM,
                            anchor="e", font=FONT_SM)
-    x_btn = cv.create_text(W - 26, 26, text="✕", fill=DIM,
-                           font=("Segoe UI", 11), tags="close")
-    cv.tag_bind("close", "<Button-1>", close)
-    w.bind("<Escape>", close)
 
     txt = tk.Text(w, bg=PANEL, fg=FG, font=FONT_BODY, wrap="word",
                   relief="flat", borderwidth=0, highlightthickness=0,

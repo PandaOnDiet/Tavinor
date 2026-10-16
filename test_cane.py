@@ -1051,7 +1051,28 @@ def check_focus():
     print("focus: %d checks passed" % n)
 
 
+def check_render():
+    """Answer panel text. A Java answer showed with every line flush left."""
+    class Txt:
+        def __init__(self):
+            self.parts = []
+
+        def insert(self, _, s, tag=""):
+            self.parts.append((s, tag))
+
+    t = Txt()
+    cane.fill_text(t, "Here:\n```\nclass A {\n    void f() {\n        x();\n"
+                      "    }\n}\n```\n    indented block\nuse `ls` now")
+    code = [s for s, tag in t.parts if tag == "code"]
+    assert code[:5] == ["class A {\n", "    void f() {\n", "        x();\n",
+                        "    }\n", "}\n"], code
+    assert code[5] == "indented block\n", code
+    assert ("ls", "code") in t.parts
+    print("render: 3 checks passed")
+
+
 if __name__ == "__main__":
+    check_render()
     check_agent()
     check_hover()
     check_soul()

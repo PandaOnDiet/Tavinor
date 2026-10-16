@@ -268,6 +268,123 @@ def nudge(bar, site):
                    font=FONT_SM)
 
 
+# ------------------------------------------------------------- page
+
+def sites_window(bar, back=None):
+    """The Blocked sites page: what focus mode closes, and the schedules.
+    Everything here goes through dispatch(), the same path as typed
+    commands, so the page and "block reddit" can never disagree."""
+    bar.root.after(0, lambda: _sites_window(bar, back))
+
+
+def _sites_window(bar, back=None):
+    import tkinter as tk
+    from cane import PANEL, FG, DIM, ACCENT, FONT_BODY, FONT_SM, MARGIN
+
+    if getattr(bar, "_sites_win", None):
+        try:
+            bar._sites_win.lift()
+            return
+        except tk.TclError:
+            bar._sites_win = None
+    W, H = bar.W, 520
+    w = tk.Toplevel(bar.root)
+    bar._sites_win = w
+    cv = cane.make_panel(w, W, H)
+    x0 = bar._x()
+    w.geometry("+%d+%d" % (x0 + 40, MARGIN))
+
+    def close(*_):
+        bar._sites_win = None
+        cane.slide(w, x0 + 40, MARGIN, 0.0, steps=8, then=w.destroy)
+
+    bar.page_header(w, cv, "BLOCKED SITES", close,
+                    back and (lambda: (close(), back())))
+    field = dict(bg="#22252c", fg=FG, relief="flat", borderwidth=0,
+                 highlightthickness=0, insertbackground=ACCENT, font=FONT_BODY)
+    body = tk.Frame(w, bg=PANEL)
+    cv.create_window(24, 52, anchor="nw", width=W - 48, height=H - 52 - 44,
+                     window=body)
+    note = cv.create_text(24, H - 24, text="", fill=DIM, anchor="w",
+                          font=FONT_SM)
+
+    def run(intent):
+        cv.itemconfig(note, text=cane.dispatch(intent))
+        draw()
+
+    def head(text, hint):
+        row = tk.Frame(body, bg=PANEL)
+        row.pack(fill="x", pady=(10, 4))
+        tk.Label(row, text=text, bg=PANEL, fg=DIM,
+                 font=("Segoe UI", 8, "bold")).pack(side="left")
+        tk.Label(row, text=hint, bg=PANEL, fg=DIM, font=FONT_SM).pack(side="right")
+
+    def line(text, sub, on_remove):
+        row = tk.Frame(body, bg=PANEL)
+        row.pack(fill="x", pady=1)
+        tk.Label(row, text=text, bg=PANEL, fg=FG, font=FONT_BODY).pack(side="left")
+        if sub:
+            tk.Label(row, text="  " + sub, bg=PANEL, fg=DIM,
+                     font=FONT_SM).pack(side="left")
+        bar._button(row, "remove", on_remove).pack(side="right")
+
+    def adder(hint, make):
+        row = tk.Frame(body, bg=PANEL)
+        row.pack(fill="x", pady=(6, 0))
+        var = tk.StringVar()
+        e = tk.Entry(row, textvariable=var, **field)
+        e.pack(side="left", fill="x", expand=True, ipady=3)
+        tk.Label(row, text="", bg=PANEL, width=1).pack(side="left")
+        ok = lambda *_: var.get().strip() and run(make(var.get().strip().lower()))
+        b = bar._button(row, "Add", ok)
+        b.config(fg=ACCENT)
+        b.pack(side="right")
+        e.bind("<Return>", ok)
+        tk.Label(body, text=hint, bg=PANEL, fg=DIM, font=FONT_SM,
+                 anchor="w").pack(fill="x")
+
+    def draw():
+        for c in body.winfo_children():
+            c.destroy()
+        s = load()
+        head("DURING FOCUS", "closed while a focus session runs")
+        if not s["sites"]:
+            tk.Label(body, text="nothing", bg=PANEL, fg=DIM,
+                     font=FONT_SM).pack(anchor="w")
+        for x in s["sites"]:
+            line(x, "", lambda x=x: run({"intent": "block", "action": "remove",
+                                         "site": x}))
+        adder("a site name, e.g. reddit or instagram.com",
+              lambda v: {"intent": "block", "action": "add", "site": v})
+
+        head("SCHEDULES", "closed at these times, focus or not")
+        if not s["blocks"]:
+            tk.Label(body, text="none", bg=PANEL, fg=DIM,
+                     font=FONT_SM).pack(anchor="w")
+        for b in s["blocks"]:
+            line(b["site"], "%s-%s %s" % (b["start"], b["end"],
+                                          _day_words(b["days"])),
+                 lambda b=b: remove_schedule(b))
+        adder("site and time, e.g. youtube 9-12 weekdays  ·  x 9pm-11pm daily",
+              lambda v: quick("block " + re.sub(r"\s+(weekdays|weekends|daily)$",
+                                                r" on \1", v))
+              or {"intent": "block", "action": "add", "site": "?",
+                  "from": "x", "to": "x"})
+
+    def remove_schedule(b):
+        with _LOCK:
+            s = load()
+            s["blocks"] = [x for x in s["blocks"] if x != b]
+            save(s)
+        cv.itemconfig(note, text="removed %s %s-%s" % (b["site"], b["start"],
+                                                       b["end"]))
+        draw()
+
+    draw()
+    w.focus_force()
+    cane.slide(w, x0, MARGIN, 0.97, x_from=x0 + 40)
+
+
 # ------------------------------------------------------------- commands
 
 def _clock(v):

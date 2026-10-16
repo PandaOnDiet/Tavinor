@@ -174,11 +174,12 @@ def forget(index):
 
 # ------------------------------------------------------------- window
 
-def open_window(bar):
-    bar.root.after(0, lambda: _window(bar))
+def open_window(bar, back=None):
+    """`back`: reopen Settings - set when opened from there."""
+    bar.root.after(0, lambda: _window(bar, back))
 
 
-def _window(bar):
+def _window(bar, back=None):
     import tkinter as tk
     from cane import PANEL, FG, DIM, ACCENT, FONT_BODY, FONT_SM, MARGIN
 
@@ -201,12 +202,8 @@ def _window(bar):
         bar._soul_win = None
         cane.slide(w, x0 + 40, MARGIN, 0.0, steps=8, then=w.destroy)
 
-    cv.create_text(24, 28, text="PERSONALITY", fill=ACCENT, anchor="w",
-                   font=("Segoe UI", 8, "bold"))
-    cv.create_text(W - 26, 28, text="✕", fill=DIM, font=("Segoe UI", 11),
-                   tags="close")
-    cv.tag_bind("close", "<Button-1>", close)
-    w.bind("<Escape>", close)
+    bar.page_header(w, cv, "PERSONALITY", close,
+                    back and (lambda: (close(), back())))
 
     field = dict(bg="#22252c", fg=FG, relief="flat", borderwidth=0,
                  highlightthickness=0, insertbackground=ACCENT)

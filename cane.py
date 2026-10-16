@@ -1873,8 +1873,12 @@ def fill_text(txt, body):
         if line.strip().startswith("```"):
             fenced = not fenced
             continue
-        if fenced or line.startswith("    "):
-            txt.insert("end", line.strip() + "\n", "code")
+        if fenced:
+            # Keep the indentation: stripping it flattened every code answer
+            # (a Java calculator came out with no nesting at all).
+            txt.insert("end", line.rstrip() + "\n", "code")
+        elif line.startswith("    "):
+            txt.insert("end", line[4:].rstrip() + "\n", "code")
         elif line.startswith("#"):
             txt.insert("end", line.lstrip("# ").rstrip() + "\n", "head")
         else:
@@ -2286,6 +2290,34 @@ class Bar:
     def show_settings(self):
         self.root.after(0, self._settings_window)
 
+    def page_header(self, w, cv, title, close, back=None):
+        """Top line of a settings-style page. With `back`, the left shows
+        "‹ SETTINGS" and both it and Escape return there; ✕ always closes.
+
+        Pages used to open with no way back - Personality, Chat and Blocked
+        sites each closed Settings and left you on your own.
+        """
+        x = 24
+        if back:
+            link = cv.create_text(x, 28, text="‹  SETTINGS", fill=DIM,
+                                  anchor="w", font=("Segoe UI", 8, "bold"),
+                                  tags="back")
+            cv.tag_bind("back", "<Button-1>", lambda e: back())
+            cv.tag_bind("back", "<Enter>", lambda e: (
+                cv.itemconfig(link, fill=ACCENT), cv.config(cursor="hand2")))
+            cv.tag_bind("back", "<Leave>", lambda e: (
+                cv.itemconfig(link, fill=DIM), cv.config(cursor="")))
+            x = 24 + tkfont.Font(font=("Segoe UI", 8, "bold")).measure(
+                "‹  SETTINGS") + 14
+        cv.create_text(x, 28, text=title, fill=ACCENT, anchor="w",
+                       font=("Segoe UI", 8, "bold"))
+        x_btn = cv.create_text(self.W - 26, 28, text="✕", fill=DIM,
+                               font=("Segoe UI", 11), tags="close")
+        cv.tag_bind("close", "<Button-1>", close)
+        cv.tag_bind("close", "<Enter>", lambda e: cv.itemconfig(x_btn, fill=FG))
+        cv.tag_bind("close", "<Leave>", lambda e: cv.itemconfig(x_btn, fill=DIM))
+        w.bind("<Escape>", lambda e: back() if back else close())
+
     def _toggle(self, cv, x, y, on, command, hit_tags=()):
         """A pill switch drawn on the canvas. Clicking it, or anything tagged
         in hit_tags (its label), flips it and calls command(new_state)."""
@@ -2458,7 +2490,15 @@ class Bar:
              lambda on: set_setting("claude", on)),
         ]
         rows = -(-len(FEATURES) // 2)         # two columns
-        h = 72 + 52 * len(general) + 40 + 208 + 38 + 32 * rows + 44
+        pages = [
+            ("Personality", "name, how it talks, your rules, its memory",
+             lambda back: soul.open_window(self, back=back)),
+            ("Blocked sites", "what focus mode closes, and when",
+             lambda back: focus.sites_window(self, back=back)),
+            ("Chat", "tasks done by your answer provider",
+             lambda back: agent.open_window(self, back=back)),
+        ]
+        h = 72 + 52 * len(general) + 34 * len(pages) + 16 + 208 + 38 + 32 * rows + 44
         w = tk.Toplevel(self.root)
         self._settings_win = w
         cv = make_panel(w, self.W, h)
@@ -2469,14 +2509,7 @@ class Bar:
             self._settings_win = None
             slide(w, x0 + 40, MARGIN, 0.0, steps=8, then=w.destroy)
 
-        cv.create_text(24, 28, text="SETTINGS", fill=ACCENT, anchor="w",
-                       font=("Segoe UI", 8, "bold"))
-        x_btn = cv.create_text(self.W - 26, 28, text="✕", fill=DIM,
-                               font=("Segoe UI", 11), tags="close")
-        cv.tag_bind("close", "<Button-1>", close)
-        cv.tag_bind("close", "<Enter>", lambda e: cv.itemconfig(x_btn, fill=FG))
-        cv.tag_bind("close", "<Leave>", lambda e: cv.itemconfig(x_btn, fill=DIM))
-        w.bind("<Escape>", close)
+        self.page_header(w, cv, "SETTINGS", close)
 
         y = 72
         for i, (label, desc, on, command) in enumerate(general):
@@ -2490,16 +2523,29 @@ class Bar:
             self._toggle(cv, self.W - 60, y - 8, on, command, (tag,))
             y += 52
 
-        cv.create_window(24, y, anchor="w", window=self._button(
-            w, "Personality…", lambda: (close(), soul.open_window(self))))
-        cv.create_window(124, y, anchor="w", window=self._button(
-            w, "Open chat", lambda: (close(), agent.open_window(self))))
-        cv.create_window(204, y, anchor="w", window=self._button(
-            w, "Blocked sites", lambda: (close(), threading.Thread(
-                target=lambda: self.status(dispatch(
-                    {"intent": "block", "action": "list"}, self), keep=True),
-                daemon=True).start())))
-        y += 40
+        # Pages: a row with an arrow, and each page has "‹ SETTINGS" back.
+        y -= 8
+        for i, (label, desc, opener) in enumerate(pages):
+            tag = "p%d" % i
+            bg = round_rect(cv, 14, y, self.W - 14, y + 30, 8, fill=PANEL,
+                            outline="", tags=tag)
+            cv.create_text(24, y + 15, text=label, fill=FG, anchor="w",
+                           font=FONT_BODY, tags=tag)
+            cv.create_text(150, y + 15, text=desc, fill=DIM, anchor="w",
+                           font=FONT_SM, tags=tag)
+            cv.create_text(self.W - 28, y + 15, text="›", fill=DIM, anchor="e",
+                           font=("Segoe UI", 14), tags=tag)
+
+            def go(_, opener=opener):
+                close()
+                opener(lambda: self.root.after(0, self._settings_window))
+            cv.tag_bind(tag, "<Button-1>", go)
+            cv.tag_bind(tag, "<Enter>", lambda e, b=bg: (
+                cv.itemconfig(b, fill="#1e222a"), cv.config(cursor="hand2")))
+            cv.tag_bind(tag, "<Leave>", lambda e, b=bg: (
+                cv.itemconfig(b, fill=PANEL), cv.config(cursor="")))
+            y += 34
+        y += 24
 
         y = self._answers_section(w, cv, y)
 
@@ -2541,8 +2587,12 @@ class Bar:
         cv.create_text(84, 24, text=question[:44], fill=DIM, anchor="w",
                        font=FONT_SM)
         if is_answer:
+            # The model that actually answered: after a fallback the header
+            # used to name the provider's model that had just failed.
+            fell = re.match(r"\(.* - answered by (.+?)\)\n", text)
             cv.create_text(self.W - 24, 24, anchor="e", fill=DIM,
-                           font=FONT_SM, text=current_model())
+                           font=FONT_SM,
+                           text=fell.group(1) if fell else current_model())
 
         txt = tk.Text(w, bg=PANEL, fg=FG, font=FONT_BODY, wrap="word",
                       relief="flat", borderwidth=0, highlightthickness=0,

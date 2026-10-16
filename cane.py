@@ -54,6 +54,7 @@ import activity  # noqa: E402
 import face  # noqa: E402
 import voice  # noqa: E402
 import notes  # noqa: E402
+import gcal  # noqa: E402
 
 MODEL =os.environ.get("CANE_MODEL", "qwen3:1.7b")
 # Runs on Ollama's servers through the same local API. Measured 1.5s and
@@ -427,6 +428,7 @@ FEATURES = [
     ("focus", "Focus & blocking", ("focus", "block")),
     ("tasks", "Tasks & habits", ("task", "habit")),
     ("notes", "Notes", ("note",)),
+    ("calendar", "Calendar & plan", ("calendar",)),
 ]
 
 
@@ -745,7 +747,7 @@ def _quick(text):
                     r"(?: settings)?", t):
         return {"intent": "soul"}
     hit = (focus.quick(t) or tasks.quick(t) or activity.quick(t)
-           or notes.quick(t))
+           or notes.quick(t) or gcal.quick(t))
     if hit:
         return hit
 
@@ -1564,6 +1566,8 @@ def dispatch(intent, ui=None):
         return activity.dispatch(intent, ui)
     if kind == "note":
         return notes.dispatch(intent, ui)
+    if kind == "calendar":
+        return gcal.dispatch(intent, ui)
     if kind == "screen":
         return access.dispatch(intent, ui)
 
@@ -1809,6 +1813,12 @@ def describe(it):
         return tasks.describe(it)
     if kind == "screen":
         return access.describe(it)
+    if kind == "calendar":
+        return {"list": "show your calendar %s" % arg,
+                "create": "add to calendar: %s, %s" % (arg[:24], it.get("when", "")),
+                "move": "move %s to %s" % (arg[:24], it.get("when", "")),
+                "delete": "delete the event %s" % arg[:30],
+                "plan": "plan your day"}.get(act, "calendar")
     if kind == "note":
         return {"add": "save a note", "search": "find notes about %s" % arg[:24],
                 "list": "show your notes",
@@ -2182,6 +2192,24 @@ class Bar:
         self.root.after(0, put)
         if not keep:
             self.root.after(2500, self.hide)   # long enough to read the hint
+
+    def confirm(self, title, lines, on_yes):
+        """Do it / Cancel, for something that must be approved first."""
+        def make():
+            h = 92 + 22 * len(lines)
+            w, cv, close = self._toast(h)
+            cv.create_text(24, 26, text=title, fill=ACCENT, anchor="w",
+                           font=("Segoe UI", 8, "bold"))
+            for k, line in enumerate(lines):
+                cv.create_text(24, 56 + 22 * k, text=line[:70], fill=FG,
+                               anchor="w", font=FONT_BODY)
+            go = self._button(w, "Do it", lambda: (close(), threading.Thread(
+                target=on_yes, daemon=True).start()))
+            go.config(fg=ACCENT, font=("Segoe UI", 9, "bold"))
+            cv.create_window(self.W - 24, h - 22, anchor="e", window=go)
+            cv.create_window(self.W - 84, h - 22, anchor="e",
+                             window=self._button(w, "Cancel", close))
+        self.root.after(0, make)
 
     def set_face(self, state):
         """Thread-safe: the face changes on the UI thread."""
@@ -2612,6 +2640,9 @@ class Bar:
             ("Activity", "%s - what you use, minute by minute"
              % ("On" if activity.on() else "Off"),
              lambda back: self._activity_page(back)),
+            ("Calendar", "Google - %s" % ("connected" if gcal.signed_in()
+                                          else "not connected"),
+             lambda back: self._calendar_page(back)),
             ("Notes", "search by meaning: %s"
              % ("on this laptop" if notes.source() == "ollama" else
                 "your provider, then this laptop"),
@@ -2714,6 +2745,60 @@ class Bar:
                          (tag,))
         cv.create_text(24, 72 + 32 * rows + 30, text="A switched-off command "
                        "replies that it is off", fill=DIM, anchor="w", font=FONT_SM)
+
+    def _calendar_page(self, back=None):
+        H = 470
+        w, cv, close = self._page("CALENDAR", H, back)
+        field = dict(bg="#22252c", fg=FG, relief="flat", borderwidth=0,
+                     highlightthickness=0, font=FONT_SM, insertbackground=ACCENT)
+        cid, secret = gcal.client()
+        cv.create_text(24, 66, anchor="w", fill=FG, font=FONT_BODY,
+                       text="Google Calendar")
+        status = cv.create_text(self.W - 24, 66, anchor="e", font=FONT_SM,
+                                fill=ACCENT if gcal.signed_in() else DIM,
+                                text="connected" if gcal.signed_in() else "not connected")
+        idv, secv = tk.StringVar(value=cid), tk.StringVar()
+        cv.create_text(24, 104, anchor="w", fill=FG, font=FONT_SM, text="Client ID")
+        cv.create_window(self.W - 24, 104, anchor="e", width=330, height=24,
+                         window=tk.Entry(w, textvariable=idv, **field))
+        cv.create_text(24, 136, anchor="w", fill=FG, font=FONT_SM, text="Client secret")
+        cv.create_window(self.W - 84, 136, anchor="e", width=270, height=24,
+                         window=tk.Entry(w, textvariable=secv, show="•", **field))
+        cv.create_text(24, 160, anchor="w", fill=DIM, font=FONT_SM,
+                       text=("saved in Windows Credential Manager" if secret
+                             else "nothing saved yet"))
+
+        def save():
+            set_s = secv.get().strip() or secret
+            gcal.set_client(idv.get(), set_s)
+            secv.set("")
+            cv.itemconfig(status, text="saved - now sign in")
+        cv.create_window(self.W - 24, 136, anchor="e",
+                         window=self._button(w, "Save", save))
+
+        def signin():
+            cv.itemconfig(status, text="a browser tab opened - finish there", fill=DIM)
+
+            def go():
+                try:
+                    msg, ok = gcal.sign_in(), True
+                except RuntimeError as e:
+                    msg, ok = str(e), False
+                self.root.after(0, lambda: cv.itemconfig(
+                    status, text=msg[:60], fill=ACCENT if ok else "#ff8a7a"))
+            threading.Thread(target=go, daemon=True).start()
+        go_btn = self._button(w, "Sign in with Google", signin)
+        go_btn.config(fg=ACCENT)
+        cv.create_window(24, 196, anchor="w", window=go_btn)
+        cv.create_window(170, 196, anchor="w", window=self._button(
+            w, "Sign out", lambda: (gcal.sign_out(), cv.itemconfig(
+                status, text="signed out", fill=DIM))))
+        self._toggle_row(cv, 244, "c_rem", "Meeting reminders",
+                         "A toast %d minutes before each meeting" % gcal.REMIND_BEFORE,
+                         setting("meeting_reminders", True),
+                         lambda on: set_setting("meeting_reminders", on))
+        cv.create_text(24, 296, anchor="nw", fill=DIM, font=FONT_SM,
+                       width=self.W - 48, text='1. Open console.cloud.google.com and create a project (any name).\n2. APIs & Services > Library: enable Google Calendar API.\n3. OAuth consent screen: External, app name Cane, your email; under\n   Test users add your own Google address.\n4. Credentials > Create credentials > OAuth client ID > Desktop app.\n5. Copy the Client ID and Client secret into this page, press Save,\n   then Sign in with Google.\nCane asks only for calendar events. The sign-in token is kept in\nWindows Credential Manager, never in a file.')
 
     def _notes_page(self, back=None):
         H = 300
@@ -3143,6 +3228,7 @@ if __name__ == "__main__":
     threading.Thread(target=access.track, daemon=True).start()
     access.on_start()
     threading.Thread(target=voice.Wake(bar).loop, daemon=True).start()
+    threading.Thread(target=gcal.reminders, args=(bar,), daemon=True).start()
     soul.ensure()
     # Start hidden: it lives in the tray, and at login nothing should appear.
     if "--show" in sys.argv:

@@ -1501,7 +1501,152 @@ def check_notes():
     print("notes: %d checks passed" % (n + 1))
 
 
+def check_gcal():
+    """Phase 10: sign-in round trip, tokens, events, planning, approvals."""
+    import gcal
+    import random
+    import threading as th
+    import urllib.request as ur
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    cane.SETTINGS = tmp / "s.json"
+    store = {}
+    real = (cane.key_get, cane.key_set, gcal._post_form, gcal._api)
+    cane.key_get = lambda k: store.get(k)
+    cane.key_set = lambda k, v: store.__setitem__(k, v) if v else store.pop(k, None)
+    n = 0
+    try:
+        # The sign-in URL asks for offline access, events only, with PKCE.
+        u = gcal.auth_url("cid", "http://127.0.0.1:5", "chal", "st")
+        for part in ("access_type=offline", "code_challenge_method=S256",
+                     "calendar.events", "state=st", "prompt=consent"):
+            assert part in u, part
+        n += 1
+
+        # Round trip: a fake browser calls the local server - first with a
+        # wrong state (ignored), then the right one.
+        gcal.set_client("cid", "sec")
+        posted = []
+        gcal._post_form = lambda url, f, timeout=20: posted.append(f) or {
+            "refresh_token": "R1", "access_token": "A1", "expires_in": 3600}
+
+        def browser(url):
+            q = dict(x.split("=", 1) for x in url.split("?", 1)[1].split("&"))
+            redirect = ur.unquote(q["redirect_uri"])
+
+            def hit():
+                time.sleep(0.2)
+                try:
+                    ur.urlopen(redirect + "/?code=BAD&state=wrong", timeout=5)
+                except Exception:
+                    pass
+                ur.urlopen(redirect + "/?code=C1&state=" + q["state"], timeout=5).read()
+            th.Thread(target=hit, daemon=True).start()
+        assert gcal.sign_in(timeout=10, open_browser=browser) == "signed in to Google Calendar"
+        assert store["google_refresh"] == "R1" and posted[0]["code"] == "C1"
+        assert posted[0]["code_verifier"] and gcal.signed_in()
+        n += 3
+
+        # Tokens: cached until expiry, then refreshed with the refresh token.
+        assert gcal.access_token() == "A1"
+        gcal._token["expires"] = 0
+        gcal._post_form = lambda url, f, timeout=20: {"access_token": "A2",
+                                                       "expires_in": 3600}
+        assert gcal.access_token() == "A2"
+        gcal.sign_out()
+        try:
+            gcal.access_token()
+            raise AssertionError("token without sign-in")
+        except RuntimeError:
+            pass
+        n += 3
+
+        # Events: timed and all-day.
+        e = gcal._parse({"id": "1", "summary": "Standup",
+                         "start": {"dateTime": "2026-10-19T10:00:00+05:30"},
+                         "end": {"dateTime": "2026-10-19T10:15:00+05:30"}})
+        assert e["title"] == "Standup" and not e["all_day"] and \
+            (e["end"] - e["start"]).seconds == 900
+        assert gcal._parse({"start": {"date": "2026-10-20"},
+                            "end": {"date": "2026-10-21"}})["all_day"]
+        n += 2
+
+        # Planning: never overlaps a meeting, hardest in the best hours,
+        # what doesn't fit is listed.
+        now = datetime(2026, 10, 19, 8, 50)
+        busy = [(now.replace(hour=10), now.replace(hour=11)),
+                (now.replace(hour=13), now.replace(hour=14, minute=30))]
+        tasks = [{"text": "email", "minutes": 15, "hard": 1},
+                 {"text": "tax report", "minutes": 90, "hard": 3},
+                 {"text": "review", "minutes": 45, "hard": 2},
+                 {"text": "huge", "minutes": 600, "hard": 2}]
+        placed, left = gcal.plan(tasks, busy, now, best=15)
+        for a, b, t in placed:
+            for x, y in busy:
+                assert b <= x or a >= y, ("overlap", t["text"], a, b)
+        hard = next(p for p in placed if p[2]["text"] == "tax report")
+        assert hard[0].hour == 15, hard
+        assert [t["text"] for t in left] == ["huge"]
+        assert all(a >= now for a, _, _ in placed)
+        n += 4
+        # Property check: random days never overlap either.
+        rnd = random.Random(7)
+        for _ in range(200):
+            busy = []
+            for _ in range(rnd.randint(0, 5)):
+                h = rnd.randint(9, 17)
+                s = now.replace(hour=h, minute=rnd.choice([0, 15, 30, 45]))
+                busy.append((s, s + timedelta(minutes=rnd.choice([15, 30, 60, 90]))))
+            ts = [{"text": str(i), "minutes": rnd.choice([15, 30, 45, 90]),
+                   "hard": rnd.randint(1, 3)} for i in range(rnd.randint(0, 8))]
+            placed, left = gcal.plan(ts, busy, now, best=rnd.choice([None, 9, 14]))
+            spans = [(a, b) for a, b, _ in placed]
+            for a, b in spans:
+                assert all(b <= x or a >= y for x, y in busy)
+            spans.sort()
+            assert all(spans[i][1] <= spans[i + 1][0] for i in range(len(spans) - 1))
+            assert len(placed) + len(left) == len(ts)
+        n += 1
+
+        # Approval: moves and deletes never run unasked.
+        store["google_refresh"] = "R1"
+        ev = {"id": "e1", "title": "Design review", "all_day": False,
+              "start": datetime(2026, 10, 20, 15), "end": datetime(2026, 10, 20, 16)}
+        did = []
+        real_find, real_move, real_delete = gcal.find, gcal.move, gcal.delete
+        gcal.find = lambda w, around=None: ev
+        gcal.move = lambda e, s: did.append(("move", s)) or dict(e, start=s,
+                                                                  end=s + timedelta(hours=1))
+        gcal.delete = lambda e: did.append(("delete",))
+        try:
+            out = cane.dispatch(cane.quick("move design review to friday at 11am"))
+            assert out.startswith("not done - needs your approval"), out
+            out = cane.dispatch(cane.quick("cancel meeting design review"))
+            assert out.startswith("not done") and did == [], (out, did)
+            asked = []
+
+            class UI:
+                confirm = staticmethod(lambda t, lines, yes: asked.append(lines))
+            assert cane.dispatch(cane.quick("cancel meeting design review"), UI) \
+                == "waiting for your OK" and asked and did == []
+            out = cane.dispatch(dict(cane.quick("cancel meeting design review"),
+                                     approved=True))
+            assert out == "deleted Design review" and did == [("delete",)]
+        finally:
+            gcal.find, gcal.move, gcal.delete = real_find, real_move, real_delete
+        n += 4
+
+        # Not connected: says so, plan still works without meetings.
+        gcal.sign_out()
+        assert cane.dispatch(cane.quick("my meetings")).startswith(
+            "Google Calendar isn't connected")
+        n += 1
+    finally:
+        cane.key_get, cane.key_set, gcal._post_form, gcal._api = real
+    print("calendar: %d checks passed" % n)
+
+
 if __name__ == "__main__":
+    check_gcal()
     check_notes()
     check_voice_face()
     check_activity()

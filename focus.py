@@ -89,6 +89,13 @@ def start(task="", minutes=DEFAULT_MIN, now=None):
         s["session"] = {"task": task.strip()[:80], "minutes": minutes,
                         "started": _iso(now),
                         "ends": _iso(now + timedelta(minutes=minutes))}
+        # Linked to a real open task when the words name one, so finishing
+        # can offer to tick it off.
+        hit = link(task)
+        if hit:
+            s["session"]["task"] = hit["text"][:80]
+            s["session"]["task_id"] = hit.get("id") or ""
+            s["session"]["task_created"] = hit["created"]
         save(s)
         return s["session"]
 
@@ -99,6 +106,8 @@ def _end(s, how, now):
     ends = datetime.fromisoformat(sess["ends"])
     stop_at = min(now, ends)
     s["history"].append({"task": sess.get("task", ""),
+                         "task_id": sess.get("task_id", ""),
+                         "task_created": sess.get("task_created", ""),
                          "planned": sess.get("minutes"),
                          "minutes": max(0, round((stop_at - started)
                                                  .total_seconds() / 60)),
@@ -230,10 +239,7 @@ def watch(bar):
         try:
             done = tick()
             if done:
-                bar.root.after(0, lambda d=done: bar.alert(
-                    {"text": "Focus done%s - %d min" % (
-                        (": " + d["task"]) if d["task"] else "", d["minutes"])},
-                    title="FOCUS"))
+                bar.root.after(0, lambda d=done: finished(bar, d))
             sites = blocked_now()
             if sites and time.monotonic() - last_close > COOLDOWN:
                 fg = winsys.foreground()
@@ -244,6 +250,62 @@ def watch(bar):
         except Exception:
             pass                        # a bad read must never stop the loop
         time.sleep(POLL)
+
+
+def link(task):
+    """The open item a focus task names: the same text, or a phrase of 4+
+    characters inside it. Stricter than "done X" matching - "focus on b"
+    must not grab whatever task contains the letter b."""
+    words = " ".join(task.lower().split())
+    if not words:
+        return None
+    items = cane.open_items()
+    return (next((i for i in items if i["text"].lower() == words), None)
+            or (next((i for i in items if words in i["text"].lower()), None)
+                if len(words) >= 4 else None))
+
+
+def task_of(h):
+    """The open item a finished session was for, if it's still open."""
+    for i in cane.open_items():
+        if (h.get("task_id") and i.get("id") == h["task_id"]) or (
+                h.get("task_created") and i["created"] == h["task_created"]
+                and i["text"] == h.get("task")):
+            return i
+    return None
+
+
+def finish_task(h):
+    """Mark the session's task done. Returns its text, or None."""
+    with cane._LOCK:
+        items = cane.load()
+        for i in items:
+            if not i["done"] and ((h.get("task_id") and i.get("id") == h["task_id"])
+                                  or (h.get("task_created") and
+                                      i["created"] == h["task_created"] and
+                                      i["text"] == h.get("task"))):
+                i["done"] = True
+                cane.save(items)
+                return i["text"]
+    return None
+
+
+def finished(bar, h):
+    """End of a session: a toast, and "Mark task done" when it was for one."""
+    from cane import FG, ACCENT
+    import winsound
+    winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)
+    w, cv, close = bar._toast(112)
+    cv.create_text(24, 26, text="FOCUS", fill=ACCENT, anchor="w",
+                   font=("Segoe UI", 8, "bold"))
+    cv.create_text(24, 58, text=("Focus done%s - %d min" % (
+        (": " + h["task"]) if h["task"] else "", h["minutes"]))[:60],
+        fill=FG, anchor="w", font=("Segoe UI", 13))
+    cv.create_window(bar.W - 24, 92, anchor="e", window=bar._button(w, "OK", close))
+    if task_of(h):
+        go = bar._button(w, "Mark task done", lambda: (finish_task(h), close()))
+        go.config(fg=ACCENT)
+        cv.create_window(bar.W - 64, 92, anchor="e", window=go)
 
 
 def nudge(bar, site):

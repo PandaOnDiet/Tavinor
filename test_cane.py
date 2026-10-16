@@ -1717,7 +1717,31 @@ def check_mcp():
     print("mcp: %d checks passed" % n)
 
 
+def check_focus_link():
+    """Gap: a focus session on a real task can tick it off at the end."""
+    import focus
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    cane.STORE, focus.STATE = tmp / "n.json", tmp / "f.json"
+    cane.SETTINGS = tmp / "s.json"
+    cane.add_note("write the quarterly tax report")
+    cane.add_note("buy bread")
+    t0 = datetime(2026, 10, 19, 10, 0)
+    s = focus.start("tax report", 25, now=t0)
+    assert s["task"] == "write the quarterly tax report" and s["task_id"]
+    h = focus.tick(now=t0 + timedelta(minutes=25))
+    assert focus.task_of(h)["text"] == "write the quarterly tax report"
+    assert focus.finish_task(h) == "write the quarterly tax report"
+    assert [i["text"] for i in cane.open_items()] == ["buy bread"]
+    assert focus.task_of(h) is None and focus.finish_task(h) is None
+    # Too short to be a link: "b" must not grab "buy bread".
+    s = focus.start("b", 5, now=t0)
+    assert s["task"] == "b" and "task_id" not in s
+    focus.stop(now=t0)
+    print("focus link: 7 checks passed")
+
+
 if __name__ == "__main__":
+    check_focus_link()
     check_mcp()
     check_gcal()
     check_notes()

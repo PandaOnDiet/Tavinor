@@ -2578,12 +2578,29 @@ class Bar:
             cv.itemconfig(test_note, text="asking…", fill=DIM)
 
             def go():
+                # Two checks: it answers, and it can drive Cane's tools - a
+                # model that can't produce the chat's JSON can't do tasks.
+                t0 = time.time()
                 try:
                     reply = answer("Reply with the single word OK.",
                                    timeout=30).splitlines()[0]
                     ok = not reply.startswith("(")   # "(" = fell back
                 except RuntimeError as e:
                     reply, ok = str(e), False
+                if ok:
+                    try:
+                        raw, note = complete(agent.system_prompt(), [{
+                            "role": "user", "content": "set a timer for 2 minutes"}],
+                            45)
+                        acts = agent.parse(raw)["actions"]
+                        tasks_ok = not note and any(
+                            a["intent"] == "timer" and a.get("arg") == "2" for a in acts)
+                    except RuntimeError:
+                        tasks_ok = False
+                    reply = "answers ✓ · tasks %s  (%.1f s)" % (
+                        "✓" if tasks_ok else "✗ - pick another model for the chat",
+                        time.time() - t0)
+                    ok = tasks_ok
                 self.root.after(0, lambda: cv.itemconfig(
                     test_note, text=reply[:90], fill=FG if ok else "#ff8a7a"))
             threading.Thread(target=go, daemon=True).start()
@@ -2618,6 +2635,10 @@ class Bar:
              "Never over full-screen apps",
              setting("hover", True),
              lambda on: set_setting("hover", on)),
+            ("Hover needs a longer rest", "Fewer accidental opens: waits "
+             "about twice as long at the top edge",
+             setting("hover_slow", False),
+             lambda on: set_setting("hover_slow", on)),
             ("Face on the bar", "Shows what it's doing - listening, thinking, "
              "focus. Off: the plain arrow",
              setting("face", True),
@@ -2653,7 +2674,9 @@ class Bar:
             ("Chat", "tasks done by your answer provider",
              lambda back: agent.open_window(self, back=back)),
         ]
-        h = 72 + 52 * len(general) + 34 * len(pages) + 16 + 208 + 44
+        # Compact rows: with 6 switches and 9 pages the old spacing made the
+        # window ~980 px tall on a 960 px screen and cut off its bottom.
+        h = 72 + 46 * len(general) + 29 * len(pages) + 16 + 208 + 44
         w = tk.Toplevel(self.root)
         self._settings_win = w
         cv = make_panel(w, self.W, h)
@@ -2676,19 +2699,19 @@ class Bar:
             cv.create_text(24, y + 11, text=desc, fill=DIM, anchor="nw",
                            font=FONT_SM, width=self.W - 120, tags=tag)
             self._toggle(cv, self.W - 60, y - 8, on, command, (tag,))
-            y += 52
+            y += 46
 
         # Pages: a row with an arrow, and each page has "‹ SETTINGS" back.
         y -= 8
         for i, (label, desc, opener) in enumerate(pages):
             tag = "p%d" % i
-            bg = round_rect(cv, 14, y, self.W - 14, y + 30, 8, fill=PANEL,
+            bg = round_rect(cv, 14, y, self.W - 14, y + 26, 8, fill=PANEL,
                             outline="", tags=tag)
-            cv.create_text(24, y + 15, text=label, fill=FG, anchor="w",
+            cv.create_text(24, y + 13, text=label, fill=FG, anchor="w",
                            font=FONT_BODY, tags=tag)
-            cv.create_text(150, y + 15, text=desc, fill=DIM, anchor="w",
+            cv.create_text(150, y + 13, text=desc, fill=DIM, anchor="w",
                            font=FONT_SM, tags=tag)
-            cv.create_text(self.W - 28, y + 15, text="›", fill=DIM, anchor="e",
+            cv.create_text(self.W - 28, y + 13, text="›", fill=DIM, anchor="e",
                            font=("Segoe UI", 14), tags=tag)
 
             def go(_, opener=opener):
@@ -2699,7 +2722,7 @@ class Bar:
                 cv.itemconfig(b, fill="#1e222a"), cv.config(cursor="hand2")))
             cv.tag_bind(tag, "<Leave>", lambda e, b=bg: (
                 cv.itemconfig(b, fill=PANEL), cv.config(cursor="")))
-            y += 34
+            y += 29
         y += 24
 
         y = self._answers_section(w, cv, y)
@@ -2888,7 +2911,7 @@ class Bar:
             w, "Delete everything", wipe))
 
     def _access_page(self, back=None):
-        H = 480
+        H = 560
         w, cv, close = self._page("SCREEN ACCESS", H, back)
         opts = [("off", "Off", "No reading, typing, clicking or running."),
                 ("ask", "Ask", "Reads the window in front when you ask. Asks "
@@ -2934,6 +2957,11 @@ class Bar:
         cv.create_text(24, y + 20, anchor="w", fill=DIM, font=FONT_SM,
                        text="An orange bar at the top shows whenever it reads "
                             "or acts")
+        self._toggle_row(cv, y + 62, "shots", "Screenshots to the vision model",
+                         "When reading text isn't enough, a screenshot of the "
+                         "window in front goes to your provider's vision model",
+                         setting("screenshots", True),
+                         lambda on: set_setting("screenshots", on))
 
         def show_log():
             rows = access.recent()

@@ -51,13 +51,14 @@ def loop(bar):
     sw = winsys.u32.GetSystemMetrics(0)          # primary screen width
     z = zone(sw, bar.W, cane.MARGIN)
     rest_since = away_since = None
-    on, checked = True, 0.0
+    on, checked, slow = True, 0.0, 1.0
     while True:
         time.sleep(POLL)
         try:
             now = time.monotonic()
             if now - checked > 2:                # not 20 file reads a second
                 on, checked = cane.setting("hover", True), now
+                slow = 2.5 if cane.setting("hover_slow", False) else 1.0
             x, y = winsys.cursor()
 
             if bar.visible:
@@ -84,7 +85,7 @@ def loop(bar):
                 continue
             if rest_since is None:
                 rest_since = now
-            elif now - rest_since >= need:
+            elif now - rest_since >= need * slow:
                 rest_since = None
                 bar.visible = bar.hover_opened = True    # no double open
                 bar.root.after(0, lambda: bar.show(hover=True))

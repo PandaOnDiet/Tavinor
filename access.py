@@ -38,7 +38,7 @@ import cane
 import winsys
 
 LEVELS = ("off", "ask", "full")
-EYES = {"read", "windows"}
+EYES = {"read", "windows", "look"}
 HANDS = {"switch", "type", "keys", "click", "run"}
 RISKY_KEYS = {"enter", "ctrl+enter", "shift+enter", "delete", "shift+delete",
               "alt+f4", "ctrl+w", "ctrl+shift+w", "ctrl+q", "ctrl+f4"}
@@ -333,6 +333,136 @@ def read(h):
     return "\n".join(out)[:6000]
 
 
+# ------------------------------------------------------------- vision
+
+# Screenshot of one window, DPI-aware (UIA and the screen are in physical
+# pixels), scaled to at most 1600 px wide to keep the upload small.
+LOOK_PS = r"""
+Add-Type -AssemblyName System.Drawing
+Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices;
+public static class CaneWin {
+  [StructLayout(LayoutKind.Sequential)] public struct R { public int L, T, Rt, B; }
+  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out R r);
+}
+'@
+[CaneWin]::SetProcessDPIAware() | Out-Null
+$r = New-Object CaneWin+R
+[CaneWin]::GetWindowRect([IntPtr][long]$env:CANE_HWND, [ref]$r) | Out-Null
+$w = $r.Rt - $r.L; $h = $r.B - $r.T
+if ($w -lt 10 -or $h -lt 10) { "EMPTY"; exit }
+$b = New-Object System.Drawing.Bitmap $w, $h
+$g = [System.Drawing.Graphics]::FromImage($b)
+$g.CopyFromScreen($r.L, $r.T, 0, 0, $b.Size)
+if ($w -gt 1600) {
+  $s = 1600 / $w; $b2 = New-Object System.Drawing.Bitmap 1600, ([int]($h * $s))
+  $g2 = [System.Drawing.Graphics]::FromImage($b2)
+  $g2.InterpolationMode = 'HighQualityBicubic'; $g2.DrawImage($b, 0, 0, $b2.Width, $b2.Height)
+  $b = $b2 }
+$b.Save($env:CANE_OUT, [System.Drawing.Imaging.ImageFormat]::Png)
+"OK"
+"""
+VISION_PREFER = ("super-vl", "-vl", "vision")
+def probe_png():
+    """A valid 16x16 white PNG, base64: enough to tell a model that takes
+    images from one that 404s."""
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return (struct.pack(">I", len(data)) + kind + data
+                + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff))
+    raw = b"".join(b"\x00" + b"\xff\xff\xff" * 16 for _ in range(16))
+    png = (b"\x89PNG\r\n\x1a\n"
+           + chunk(b"IHDR", struct.pack(">IIBBBBB", 16, 16, 8, 2, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+    return base64.b64encode(png).decode()
+
+
+def screenshot(h):
+    """PNG bytes of one window, or None."""
+    import tempfile
+    out = os.path.join(tempfile.gettempdir(), "cane_look.png")
+    env = dict(os.environ, CANE_HWND=str(int(h)), CANE_OUT=out)
+    r = subprocess.run(["powershell", "-NoProfile", "-Command", LOOK_PS], env=env,
+                       capture_output=True, timeout=30,
+                       creationflags=subprocess.CREATE_NO_WINDOW)
+    if b"OK" not in r.stdout:
+        return None
+    with open(out, "rb") as f:
+        data = f.read()
+    os.remove(out)
+    return data
+
+
+def _vision_call(prov, model, question, b64, timeout=60):
+    import json as _json
+    import urllib.request
+    if prov == "anthropic":
+        import anthropic
+        c = anthropic.Anthropic(api_key=cane.key_get(prov), timeout=timeout)
+        r = c.messages.create(model=model, max_tokens=800, messages=[{
+            "role": "user", "content": [
+                {"type": "image", "source": {"type": "base64",
+                                             "media_type": "image/png", "data": b64}},
+                {"type": "text", "text": question}]}])
+        return "".join(b.text for b in r.content if b.type == "text")
+    body = _json.dumps({"model": model, "max_tokens": 800, "messages": [{
+        "role": "user", "content": [
+            {"type": "text", "text": question},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64}}]}]})
+    req = urllib.request.Request(cane.PROVIDERS[prov][1] + "/chat/completions",
+                                 body.encode(), {"Content-Type": "application/json",
+                                                 "Authorization": "Bearer " + cane.key_get(prov)})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return _json.load(r)["choices"][0]["message"].get("content") or ""
+
+
+def vision_model(prov):
+    """The provider's vision model: Claude's own model, a saved one, or the
+    first listed vision model that actually takes an image (on Panda's
+    NVIDIA key most listed ones 404 or time out)."""
+    if prov == "anthropic":
+        return cane.current_model("anthropic")
+    saved = cane.setting("vision_model:" + prov)
+    if saved:
+        return saved
+    names = [m for m in cane.provider_models(prov)
+             if re.search(r"vl\b|-vl|vision", m.lower())]
+    names.sort(key=lambda m: next((i for i, p in enumerate(VISION_PREFER) if p in m), 9))
+    for m in names[:6]:
+        try:
+            _vision_call(prov, m, "Reply OK.", probe_png(), timeout=20)
+            cane.set_setting("vision_model:" + prov, m)
+            return m
+        except Exception:
+            continue
+    return None
+
+
+def look(h, question):
+    """Ask the vision model about a window. Returns text for the chat."""
+    if not cane.setting("screenshots", True):
+        return "screenshots are switched off in Settings > Screen access"
+    prov = cane.provider()
+    if prov == "ollama" or not cane.key_get(prov):
+        return "looking needs a keyed provider with a vision model"
+    model = vision_model(prov)
+    if not model:
+        return "%s has no vision model that answers" % cane.PROVIDERS[prov][0]
+    png = screenshot(h)
+    if not png:
+        return "couldn't take a screenshot of that window"
+    try:
+        said = _vision_call(prov, model, question or "Describe what is on this "
+                            "screen, including any text that matters.",
+                            base64.b64encode(png).decode())
+    except Exception as e:
+        return "the vision model failed: %s" % str(e)[:80]
+    return "looked (%s): %s" % (model, said.strip()[:3000])
+
+
 # ------------------------------------------------------------- log
 
 def log(a, approved, result):
@@ -409,6 +539,8 @@ def _do(act, arg, approved):
     if act == "read":
         text = read(h)
         return ("screen text:\n" + text) if text else "couldn't read any text there"
+    if act == "look":
+        return look(h, arg)
     if act == "click":
         # Single quotes doubled for PowerShell: "don't save" in the risky
         # list once broke the whole script, and every click failed silently.
@@ -482,6 +614,7 @@ def panic(bar):
 def describe(it):
     act, arg = it.get("action"), str(it.get("arg") or "")
     return {"read": "read the window in front", "windows": "list open windows",
+            "look": "look at the window in front",
             "switch": "switch to %s" % arg[:30], "type": "type “%s”" % arg[:30],
             "keys": "press %s" % norm_keys(arg), "click": "click “%s”" % arg[:30],
             "run": "run: %s" % arg[:40]}.get(act, "screen")
@@ -491,6 +624,8 @@ try:
     import agent
     agent.EXTRA["screen"] = (
         '{"intent":"screen","action":"read"}  read the text of the window in front; '
+        '"action":"look","arg":"<question>" sends a screenshot of it to a vision '
+        'model - use when read gives too little; '
         '"action":"windows" lists open windows; "switch" + "arg":"<window title words>"; '
         '"type" + "arg":"<text>" types into the window in front; "keys" + "arg":'
         '"ctrl+s"; "click" + "arg":"<button name>"; "run" + "arg":"<PowerShell '

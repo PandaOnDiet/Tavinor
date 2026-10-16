@@ -355,6 +355,86 @@ Alt-tap trick swallowed the first typed letter), and click through UI
 Automation, or with the mouse at the element's centre when the app exposes
 no click action - the cursor is put back afterwards.
 
+## Voice
+
+Push to talk with **Ctrl+Alt+V** or the mic on the bar; what you say runs
+exactly like typed text. Windows' own speech engine finds where you start
+and stop talking and keeps that audio; **Whisper** (faster-whisper, `small`
+model, already on this laptop, loaded local-files-only) turns it into text.
+On the same synthetic test speech Windows' dictation got 2 of 6 commands
+right ("open whatsapp" -> "Open one separate"); Whisper got 6 of 6 in about
+2 s each. Settings > Voice can switch back to Windows' engine.
+
+**"Hey <name>"** is off by default. The name is the personality's, so
+renaming the assistant renames the wake word. Every phrase heard while it's
+on is checked by Whisper on this laptop (~2 s of CPU each; nothing is sent
+anywhere), because Windows' dictation mishears "hey cane" beyond any word
+filter ("I can open Croat", "Peking what time is it"). "Hey cane, open
+chrome" runs "open chrome" straight away. A stand-in for the name must be
+about the same length: Kane and Cain wake it, "okay cancel that" doesn't.
+
+**Read answers aloud** speaks answers and chat replies with Windows' voice,
+leaving code out. The microphone follows Screen access: at Off nothing
+listens. Windows refused to start the speech scripts as `-EncodedCommand`
+("Access is denied"), so their values travel in environment variables.
+
+## The face
+
+A small face replaces the arrow on the bar: idle (it blinks), listening,
+thinking, done, error, focus, and orange eyes while screen access is in use.
+Settings > Face on the bar turns it back into the arrow.
+
+## Notes
+
+`note: the wifi password is on the fridge`, `find note about the internet
+login`, `notes`, `delete note 3`. Found by meaning: your provider's
+embedding model first (Cane uses the first listed one that actually answers
+- on this NVIDIA key 5 of 7 listed return 404), then Ollama's
+`nomic-embed-text`, then plain words, and each fallback says so. Settings >
+Notes > Only on this laptop skips the provider. On six notes searched with
+paraphrases sharing no words, NVIDIA's model ranked the right note first 6
+of 6, nomic 5 of 6. Results are the best match plus anything within 75% of
+its score - models score on different scales. `note that X` (no colon)
+still saves an open item, as before.
+
+## Calendar (Google) and plan my day
+
+Settings > Calendar has the five setup steps: you create a free OAuth
+client in Google Cloud Console, paste its ID and secret, and press Sign in
+with Google. Cane asks for calendar events only; the sign-in token is kept
+in Windows Credential Manager.
+
+`what's on my calendar tomorrow`, `add meeting design review tomorrow at
+3pm for 1 hour`, `move design review to friday at 11am`, `cancel meeting
+design review`. Reading and adding run at once; **moving and deleting
+always ask** with a Do it / Cancel card. A toast comes 10 minutes before
+each meeting.
+
+`plan my day` fits open tasks into the free time between meetings, hardest
+first and inside your best hours (from Activity) when it fits; what doesn't
+fit is listed. Your answer model estimates each task's length and
+difficulty (15 s cap, 30 min / medium if it can't). Tested on 200 random
+days: never overlapping a meeting or another task.
+
+## Agent hooks (MCP) for Claude Code and others
+
+    claude mcp add cane -- python "D:\VS Code\Cane\mcp_server.py"
+
+Tools: `get_day`, `search_notes` (read), `add_task`, `add_note`,
+`start_focus` (each shows a Do it / Cancel card in Cane and waits up to 120
+s; no answer is no), `animate_face`. The server forwards to the running
+Cane over 127.0.0.1 with a fresh token per start (`bridge.json`); without
+Cane running, tools say so. Verified with the real Claude Code: an approved
+task appeared in Cane, a declined one didn't.
+
+## Looking at the screen
+
+When reading a window's text isn't enough, the chat can **look**: a
+screenshot of the window in front goes to your provider's vision model
+(Cane picks the first that answers - here `nemotron-3.5-super-vl`, which
+described a test window exactly in 1.9 s). Settings > Screen access >
+Screenshots to the vision model turns it off.
+
 ## Reminders
 
 Times understood: `in 20 minutes`, `in 2 hours`, `in 3 days`, `at 3pm`,

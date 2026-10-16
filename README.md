@@ -17,9 +17,14 @@ Every sentence goes through three tiers, cheapest first:
 3. **Questions** go to a cloud model, and the answer appears in a panel.
    Copilot is one click away.
 
-Tasks like "move my pdfs into paisa" go to Claude Code only when it's switched
-on in the tray menu. Open items and reminders live in `notes.json` next to this
-file.
+**Tasks are done in Cane's own chat**, by your answer provider, through Cane's
+own commands (see [Chat](#chat)). Nothing is handed to Claude Code or any other
+CLI on its own. Open items and reminders live in `notes.json` next to this file.
+
+Touching the top edge of the screen above the bar opens it without the hotkey
+([Hover to open](#hover-to-open)). The chat and answers follow your
+[personality file](#personality), and [focus mode](#focus-mode) closes
+distracting tabs until a session ends. The roadmap is `TABY-PLAN.md`.
 
 ## Run
 
@@ -82,12 +87,13 @@ immediately, with no Save button. Close with ✕ or Escape.
 |---|---|---|
 | Start with Windows | on | Adds/removes `Cane.vbs` in `shell:startup`. Reads the real file, not a saved flag |
 | Cloud answers | on | On: questions go to the answer provider and the answer appears in Cane. Off: Cane sends nothing and opens Copilot with the question copied |
-| Claude Code for tasks | **off** | Tasks like "move my pdfs" open Claude Code in a terminal |
+| Hover to open | on | Touch the top edge above the bar to open it (see [Hover to open](#hover-to-open)) |
+| Claude Code button in chat | **off** | Adds *Hand to Claude Code* to the chat. Nothing goes to it unless you press it |
 | Answers → Provider | Ollama | Ollama, Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter, NVIDIA |
 | Answers → API key | — | Paste and press Save. Stored in **Windows Credential Manager** as `Cane/<provider>`, never in `settings.json`. Shown afterwards only as its last four characters. Saving an empty box deletes it |
 | Answers → Model | per provider | Listed live from the provider once a key is saved (typing a name also works). Claude defaults to `claude-opus-5`; the others have no default, because their model names change too often to hard-code |
 | Answers → Test | — | Sends one tiny question. Shows the reply, or the exact reason it failed |
-| Features (11) | all on | Apps & sites, Volume & media, Brightness, Timers, Lock screen, Screenshot, Dark mode, Web search, Weather, Play songs, Reminders. A switched-off feature replies "… is switched off in settings" |
+| Features (13) | all on | Apps & sites, Volume & media, Brightness, Timers, Lock screen, Screenshot, Dark mode, Web search, Weather, Play songs, Reminders, File tasks, Focus & blocking. A switched-off feature replies "… is switched off in settings" |
 
 Turning Reminders off stops the *commands*. Reminders you already saved still
 pop up, because silently dropping one you set would be worse than a popup you
@@ -143,7 +149,7 @@ to change it. Delete `cane.ico` and Cane falls back to the stock Windows icon.
 | `remind me in 20 minutes to check the build` | Saves it with a time; pops up when due |
 | `what's left` / `what am I tracking` | Lists open items, numbered |
 | `mark 2 done` / `done ravi` | Closes an item by number or by words |
-| a task (`move my pdfs into paisa`) | Claude Code in a terminal, **only if switched on** in the tray |
+| a task (`write me a script`, `set a timer and remind me after`) | Cane's own [chat](#chat), done by your answer provider |
 
 ### File tasks: plan, approve, undo
 
@@ -211,6 +217,76 @@ question in the link. Both were tested and both opened with an empty box.
 Typing it in for you would mean sending keystrokes into whichever window has
 focus. If Copilot were slow to start, that could be a terminal. So Cane copies
 the question to the clipboard and opens Copilot, and you paste it.
+
+## Chat
+
+`chat`, the tray's **Chat**, or any request the router reads as a task opens
+Cane's chat window. Your answer provider does the work there through Cane's
+own commands - apps, volume, timers, reminders, focus, file moves - in rounds:
+it proposes actions, Cane runs them, the results go back, up to 4 rounds per
+message. History is kept in `chat.json` until you press Clear.
+
+- Every provider works, including ones without tool calling: the model replies
+  with one small JSON object, and anything that isn't a known command is
+  dropped before it can run.
+- **Lock, undo and marking items done ask first** with an Allow / Decline card.
+  Declined means nothing ran. Everything else is cheap or reversible and runs
+  straight away; file moves still go through their own plan panel.
+- A reply written *before* its actions ran is never shown - live, one stated
+  the time before the clock had been read, and got it wrong. Only the reply
+  written after the results is shown.
+- A message the model never answered is dropped, so it can't be carried out
+  by surprise a message later.
+- **Claude Code is a button, never automatic.** With "Claude Code button in
+  chat" on in Settings, the chat shows *Hand to Claude Code*; nothing goes to
+  Claude Code unless you press it.
+
+## Hover to open
+
+Touch the top edge of the screen above the bar and it drops down. Move away
+without clicking and it tucks itself back. Clicking into it keeps it open and
+takes keyboard focus; until then it leaves focus where you were typing.
+
+It never opens over a full-screen window (video, games, F11 - and the lock
+screen), never while a mouse button is held (dragging a window to the top is
+Windows' snap-to-maximise), and needs the cursor to rest 0.15 s (0.35 s over a
+browser, whose tabs sit at the top edge). The right-most 160 px are left alone
+for maximised windows' close buttons. Switch it off in Settings.
+
+## Personality
+
+`soul.md` holds who the assistant is (name, personality, or a preset: Concise,
+Warm, Blunt, Butler, Coach), who you are, your rules, and what it has learned
+about you. Edit it from **Personality…** (tray or Settings), by typing
+`personality`, or in Notepad - it is read fresh for every message.
+
+It goes to answers and the chat, **never to the command router**, which is
+already at its limit. Memory is only ever *proposed* by the chat ("Remember
+this?"); nothing is saved until you press Remember, and every fact can be
+forgotten from the Personality page. The soul is sent to your answer provider
+with each message; the switch on that page turns that off.
+
+## Focus mode
+
+| Say | Does |
+|---|---|
+| `focus` / `focus on the report for 45 min` / `focus 30` | start a session (25 min by default) |
+| `how long left` · `stop focus` · `focus history` | status, stop, the last sessions |
+| `block reddit` / `unblock youtube` | add or remove a site blocked during focus |
+| `block youtube 9-12 on weekdays` | a schedule (daily / weekdays / weekends) |
+| `what's blocked` | list both |
+
+While a session or schedule is active, a blocked site's tab is closed with
+Ctrl+W and a toast offers **Let me through 5 min**. YouTube, Twitch and X are
+blocked by default. The bar shows the countdown while a session runs.
+
+Closing a tab is the one destructive thing here, so the window must be a
+browser, must still be in front, and its title must still name the site at
+the moment Ctrl+W is sent; then there is a 3 s cooldown so a closing tab's
+lingering title can't get the *next* tab closed. Sites are matched on whole
+title parts: "Lofi - YouTube" is YouTube, "Song - YouTube Music" and "Notes
+about YouTube - Google Docs" are not. A session that ends while Cane isn't
+running is recorded as abandoned. State lives in `focus.json`.
 
 ## Reminders
 

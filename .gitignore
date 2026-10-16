@@ -4,3 +4,6 @@ __pycache__/
 settings.json
 notes.json
 undo.json
+chat.json
+soul.md
+focus.json

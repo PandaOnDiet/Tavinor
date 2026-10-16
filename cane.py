@@ -7,8 +7,11 @@ tiers, cheapest first:
   2. loose phrasing (skip this one, remind me at 5) - tiny local model
   3. questions - a cloud model answers into a panel; Copilot one click away
 
-Tasks (move my pdfs...) go to Claude Code only when it is switched on from
-the tray menu. Also keeps open items and reminders in notes.json.
+Tasks go to Cane's own chat (agent.py), done by the answer provider through
+Cane's own commands; Claude Code is only ever an explicit button there. Also
+keeps open items and reminders in notes.json, a personality in soul.md
+(soul.py), focus sessions and blocks in focus.json (focus.py), and opens
+when the cursor touches the top edge (hover.py).
 
 Stdlib only. Needs ollama running locally.
 """
@@ -37,7 +40,16 @@ from tkinter import ttk
 from datetime import datetime, timedelta
 from pathlib import Path
 
-MODEL = os.environ.get("CANE_MODEL", "qwen3:1.7b")
+# The feature modules import cane. Run as a script this file is __main__,
+# and without this alias each of them would load a second, separate copy -
+# its own settings cache, app index and Bar - and nothing would line up.
+sys.modules.setdefault("cane", sys.modules[__name__])
+import agent  # noqa: E402  (after the alias, on purpose)
+import focus  # noqa: E402
+import hover  # noqa: E402
+import soul  # noqa: E402
+
+MODEL =os.environ.get("CANE_MODEL", "qwen3:1.7b")
 # Runs on Ollama's servers through the same local API. Measured 1.5s and
 # correct, where the 1.7B router gave a plausible-looking wrong git answer.
 ANSWER_MODEL = os.environ.get("CANE_ANSWER_MODEL", "nemotron-3-super:cloud")
@@ -353,6 +365,7 @@ FEATURES = [
     ("music", "Play songs", ("search_play",)),
     ("reminders", "Reminders", ("remember", "remind", "recall", "done")),
     ("files", "File tasks", ("files", "undo")),
+    ("focus", "Focus & blocking", ("focus", "block")),
 ]
 
 
@@ -661,6 +674,14 @@ def _quick(text):
         return {"intent": "settings"}
     if re.fullmatch(r"undo(?: that| it| the (?:last )?(?:move|moves|changes?))?", t):
         return {"intent": "undo"}
+    if re.fullmatch(r"(?:open |show )?(?:the |cane )?chat|let'?s chat|chat with (?:me|cane)", t):
+        return {"intent": "chat"}
+    if re.fullmatch(r"(?:open |edit |show )?(?:cane'?s |my |your )?(?:personality|soul)"
+                    r"(?: settings)?", t):
+        return {"intent": "soul"}
+    hit = focus.quick(t)
+    if hit:
+        return hit
 
     # Bare transport words. Instant, and lets "pasue" be corrected to pause.
     m = re.fullmatch(r"(pause|stop|play|resume|next|skip|previous|prev|mute|"
@@ -1113,6 +1134,10 @@ def answer(question, history=None, timeout=45):
     system = ("Answer in at most four short sentences. Put commands and code "
               "in backticks; no other markdown. The local time is "
               + datetime.now().strftime("%A %d %B %Y, %H:%M") + ".")
+    personality = soul.prompt()
+    if personality:
+        system += ("\n\nYou are %s. Keep to the length limit above whatever "
+                   "the personality says.\n\n" % soul.name()) + personality
     turns = []
     for prev_q, prev_a in (history or []):
         turns += [{"role": "user", "content": prev_q},
@@ -1465,6 +1490,24 @@ def dispatch(intent, ui=None):
         if kind in kinds and not feature_on(key):
             return label + " is switched off in settings"
 
+    if kind in ("focus", "block"):
+        return focus.dispatch(intent, ui)
+
+    if kind == "soul":
+        if ui:
+            soul.open_window(ui)
+        return "personality"
+
+    # Tasks are done in Cane's own chat, by the answer provider, through
+    # Cane's own commands. Nothing is handed to an external CLI here; Claude
+    # Code is a button in the chat that only you can press.
+    if kind in ("chat", "escalate"):
+        if not ui:
+            return "that's a job for the chat"
+        ui.root.after(0, ui.hide)
+        agent.open_window(ui, arg if kind == "escalate" and arg else None)
+        return "working on it in the chat" if kind == "escalate" else "chat"
+
     if kind == "media":
         if action in ("volup", "voldown"):
             try:   # one media key is a 2% step - too small to notice
@@ -1637,18 +1680,7 @@ def dispatch(intent, ui=None):
                                          " (%d had moved again)" % len(missed)
                                          if missed else "")
 
-    # No cmd.exe in this path. Going through "cmd /c start ... cmd /k" meant
-    # cmd reparsed the sentence, so a command containing & | > or a quote was
-    # split and the tail executed: 'x" & calc & "y' launched calc.
-    # CREATE_NEW_CONSOLE gives the visible window without any shell parsing.
-    if not setting("claude", False):
-        return "that's a task for Claude Code - switch it on in settings"
-    claude = shutil.which("claude")
-    if not claude:
-        return "claude not found on PATH"
-    subprocess.Popen([claude, arg], cwd=ESCALATE_CWD,
-                     creationflags=subprocess.CREATE_NEW_CONSOLE)
-    return "claude: " + arg[:40]
+    return "nothing I can do with that"
 
 
 # ------------------------------------------------------------- suggestions
@@ -1656,15 +1688,18 @@ def dispatch(intent, ui=None):
 # These put another window in front, so the bar gets out of the way. Anything
 # else (volume, a timer, an answer) leaves it open for the next command.
 HIDE_AFTER = {"launch", "google", "search_play", "copilot", "escalate",
-              "lock", "screenshot", "media", "none", "offline"}
+              "lock", "screenshot", "media", "none", "offline", "chat", "soul"}
 
 SAYS = {"weather": "show the weather", "clock": "show the time",
         "lock": "lock the screen", "screenshot": "take a screenshot",
         "settings": "open Cane's settings", "recall": "show what's open",
         "remember": "save a note", "done": "mark it done",
-        "escalate": "hand it to Claude Code",
+        "escalate": "do it in the chat", "chat": "open the chat",
+        "soul": "open the personality settings",
         "files": "plan it and show you first",
         "undo": "put the last moved files back"}
+FOCUS_SAYS = {"stop": "stop focus", "status": "show focus time left",
+              "history": "show focus history"}
 MEDIA_SAYS = {"pause": "pause", "play": "play", "next": "next track",
               "prev": "previous track", "mute": "mute", "volup": "volume up",
               "voldown": "volume down"}
@@ -1695,6 +1730,17 @@ def describe(it):
         return "ask Copilot “%s”" % arg[:28]
     if kind == "remind":
         return "remind you: %s" % arg[:32]
+    if kind == "focus":
+        if act == "start":
+            return "focus %s min%s" % (it.get("minutes"), " on " + arg[:28]
+                                       if arg else "")
+        return FOCUS_SAYS.get(act, "focus")
+    if kind == "block":
+        site = it.get("site", "")
+        if act == "add":
+            return "block %s %s" % (site, "%s-%s" % (it["from"], it["to"])
+                                    if it.get("from") else "during focus")
+        return "unblock " + site if act == "remove" else "show blocked sites"
     return SAYS.get(kind, kind)
 
 
@@ -1806,6 +1852,19 @@ def slide(win, x_to, y, a_to, step=0, steps=12, then=None, x_from=None):
         then()
 
 
+def drop(win, x, y_to, a_to, step=0, steps=10, y_from=None):
+    """slide(), but down from the top edge - for the hover-opened bar."""
+    t = step / steps
+    e = 1 - (1 - t) ** 3
+    try:
+        win.geometry("+%d+%d" % (x, int(y_from + (y_to - y_from) * e)))
+        win.attributes("-alpha", a_to * e)
+    except tk.TclError:
+        return
+    if step < steps:
+        win.after(8, lambda: drop(win, x, y_to, a_to, step + 1, steps, y_from))
+
+
 def fill_text(txt, body):
     """Insert an answer, styling the little markdown answers actually use:
     fenced or indented code, `inline code`, and # headings."""
@@ -1836,6 +1895,9 @@ class Bar:
         self.root = tk.Tk()
         self.root.withdraw()
         self.rows, self.sel, self.thread, self._idle_id = [], 0, [], None
+        # Read by hover.loop on its own thread - plain attributes, no Tk calls.
+        self.visible = self.hover_opened = self.engaged = False
+        self.bar_height = self.H
         cv = make_panel(self.root, self.W, self.H + 10 + self.ROW * self.ROWS,
                         rect_h=self.H)
 
@@ -1865,7 +1927,18 @@ class Bar:
         self.entry.bind("<KeyRelease>", self._live)
         self.entry.bind("<Down>", lambda e: self._move(1))
         self.entry.bind("<Up>", lambda e: self._move(-1))
+        # A hover-opened bar has no keyboard focus (it must not steal it from
+        # what you were typing in). Clicking it takes focus and keeps it open.
+        self.entry.bind("<Button-1>", self._engage)
+        cv.bind("<Button-1>", self._engage)
+        self.entry.bind("<KeyPress>", lambda e: setattr(self, "engaged", True),
+                        add="+")
         self._toasts = []
+
+    def _engage(self, _=None):
+        self.engaged = True
+        self.root.focus_force()
+        self.entry.focus_set()
 
     # -- live results
 
@@ -1886,7 +1959,7 @@ class Bar:
         cv.delete("rows")
         self.rows = rows
         self.sel = min(self.sel, max(0, len(rows) - 1))
-        h = self._bar_h()
+        h = self.bar_height = self._bar_h()
         round_rect(cv, 0, 0, self.W - 1, h - 1, RADIUS, fill=PANEL,
                    outline="", tags="rows")
         cv.tag_lower("rows")             # under the input, chevron and gear
@@ -1934,14 +2007,32 @@ class Bar:
 
     # -- visibility
 
-    def show(self):
+    def show(self, hover=False):
+        """`hover`: opened by touching the top edge. It drops down from the
+        top instead of sliding in, and leaves keyboard focus where it was."""
         x = self._x()
-        self.root.geometry("+%d+%d" % (x + 40, MARGIN))
+        # Mid-fade-out counts as hidden, so a quick re-open still animates in.
+        already = (self.root.winfo_viewable()
+                   and float(self.root.attributes("-alpha")) > 0.9)
+        self.visible, self.hover_opened = True, hover
+        self.engaged = not hover
+        line = focus.bar_line()
+        if line and not self.entry.get():
+            self.label.config(text=line)
+        if already:
+            if not hover:
+                self._engage()
+            return
         self.root.attributes("-alpha", 0.0)
         self.root.deiconify()
         self.root.lift()
-        self.entry.focus_force()
-        slide(self.root, x, MARGIN, 0.97, x_from=x + 40)
+        if hover:
+            self.root.geometry("+%d+%d" % (x, MARGIN - 30))
+            drop(self.root, x, MARGIN, 0.97, y_from=MARGIN - 30)
+        else:
+            self.root.geometry("+%d+%d" % (x + 40, MARGIN))
+            self.entry.focus_force()
+            slide(self.root, x, MARGIN, 0.97, x_from=x + 40)
         threading.Thread(target=warmup, daemon=True).start()
 
     def hide(self):
@@ -1951,6 +2042,7 @@ class Bar:
             self.label.config(text="")
             self._draw_rows([])
             self.thread = []            # closing ends the question thread
+            self.visible = self.hover_opened = self.engaged = False
         slide(self.root, self._x() + 40, MARGIN, 0.0, steps=8, then=done)
 
     def _touch(self):
@@ -1970,6 +2062,7 @@ class Bar:
         No animation here on purpose: the keypress is sent 250ms later, and an
         animating window would still own focus when it lands.
         """
+        self.visible = self.hover_opened = False
         self.root.after(0, self.root.withdraw)
 
     def status(self, msg, keep=False):
@@ -2353,13 +2446,19 @@ class Bar:
              "Cane opens Copilot instead",
              setting("cloud_answers", True),
              lambda on: set_setting("cloud_answers", on)),
-            ("Claude Code for tasks", "Tasks like \"move my pdfs\" open "
-             "Claude Code in a terminal",
+            ("Hover to open", "Touch the top edge above the bar to open it. "
+             "Never over full-screen apps",
+             setting("hover", True),
+             lambda on: set_setting("hover", on)),
+            # Tasks are always done in Cane's chat. This only adds a button
+            # there - nothing is ever handed to Claude Code automatically.
+            ("Claude Code button in chat", "Adds \"Hand to Claude Code\" to the "
+             "chat. Nothing goes to it unless you press it",
              setting("claude", False),
              lambda on: set_setting("claude", on)),
         ]
         rows = -(-len(FEATURES) // 2)         # two columns
-        h = 72 + 52 * len(general) + 208 + 38 + 32 * rows + 44
+        h = 72 + 52 * len(general) + 40 + 208 + 38 + 32 * rows + 44
         w = tk.Toplevel(self.root)
         self._settings_win = w
         cv = make_panel(w, self.W, h)
@@ -2390,6 +2489,17 @@ class Bar:
                            font=FONT_SM, width=self.W - 120, tags=tag)
             self._toggle(cv, self.W - 60, y - 8, on, command, (tag,))
             y += 52
+
+        cv.create_window(24, y, anchor="w", window=self._button(
+            w, "Personality…", lambda: (close(), soul.open_window(self))))
+        cv.create_window(124, y, anchor="w", window=self._button(
+            w, "Open chat", lambda: (close(), agent.open_window(self))))
+        cv.create_window(204, y, anchor="w", window=self._button(
+            w, "Blocked sites", lambda: (close(), threading.Thread(
+                target=lambda: self.status(dispatch(
+                    {"intent": "block", "action": "list"}, self), keep=True),
+                daemon=True).start())))
+        y += 40
 
         y = self._answers_section(w, cv, y)
 
@@ -2479,7 +2589,7 @@ def reminder_loop(bar):
 WM_HOTKEY, WM_COMMAND, WM_DESTROY = 0x0312, 0x0111, 0x0002
 WM_TRAY, WM_LBUTTONUP, WM_RBUTTONUP = 0x0401, 0x0202, 0x0205
 NIM_ADD, NIM_DELETE, NIF_ALL = 0, 2, 0x01 | 0x02 | 0x04
-ID_OPEN, ID_ITEMS, ID_QUIT, ID_SETTINGS = 1, 2, 3, 4
+ID_OPEN, ID_ITEMS, ID_QUIT, ID_SETTINGS, ID_CHAT, ID_SOUL = 1, 2, 3, 4, 5, 6
 MF_SEPARATOR = 0x0800
 
 LRESULT = ctypes.c_ssize_t
@@ -2555,7 +2665,9 @@ def tray_loop(bar):
             else:
                 menu = u32.CreatePopupMenu()
                 u32.AppendMenuW(menu, 0, ID_OPEN, "Open Cane\tCtrl+Alt+Space")
+                u32.AppendMenuW(menu, 0, ID_CHAT, "Chat")
                 u32.AppendMenuW(menu, 0, ID_ITEMS, "Open items")
+                u32.AppendMenuW(menu, 0, ID_SOUL, "Personality…")
                 u32.AppendMenuW(menu, 0, ID_SETTINGS, "Settings…")
                 u32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
                 u32.AppendMenuW(menu, 0, ID_QUIT, "Quit Cane")
@@ -2572,6 +2684,10 @@ def tray_loop(bar):
                 bar.root.after(0, lambda: bar._list_window(open_items()))
             elif cmd == ID_SETTINGS:
                 bar.show_settings()
+            elif cmd == ID_CHAT:
+                agent.open_window(bar)
+            elif cmd == ID_SOUL:
+                soul.open_window(bar)
             elif cmd == ID_QUIT:
                 u32.DestroyWindow(hwnd)
         elif msg == WM_DESTROY:
@@ -2666,6 +2782,9 @@ if __name__ == "__main__":
     threading.Thread(target=reminder_loop, args=(bar,), daemon=True).start()
     threading.Thread(target=warmup, daemon=True).start()
     threading.Thread(target=index_apps, daemon=True).start()
+    threading.Thread(target=hover.loop, args=(bar,), daemon=True).start()
+    threading.Thread(target=focus.watch, args=(bar,), daemon=True).start()
+    soul.ensure()
     # Start hidden: it lives in the tray, and at login nothing should appear.
     if "--show" in sys.argv:
         bar.show()

@@ -124,24 +124,22 @@ def check_edges():
     assert [r["text"] for r in cane.due_now(now=NOW)] == ["good"]
     assert cane.due_now(now=NOW) == [], "re-fired after a bad row"
 
-    # Escalation must not go through a shell. Via cmd.exe, a sentence
-    # containing a quote and & was reparsed and the tail executed.
+    # Tasks are done in Cane's own chat (decision D5, 2026-10-16). Before,
+    # every task opened the Claude CLI once it was switched on - Panda's API
+    # key was never used for work. Now nothing is spawned, switch on or off;
+    # Claude Code is only a button in the chat.
     cane.SETTINGS = pathlib.Path(tempfile.mkdtemp()) / "s.json"
     seen = []
     real = cane.subprocess.Popen
     cane.subprocess.Popen = lambda *a, **k: seen.append((a, k))
     try:
-        # Claude Code is opt-in: off by default, nothing may be spawned.
-        cane.dispatch({"intent": "escalate", "arg": "move my pdfs"})
-        assert seen == [], "escalated while Claude Code was switched off"
-        cane.set_setting("claude", True)
-        cane.dispatch({"intent": "escalate", "arg": 'x" & calc & "y'})
+        for on in (False, True):
+            cane.set_setting("claude", on)
+            out = cane.dispatch({"intent": "escalate", "arg": 'x" & calc & "y'})
+            assert out == "that's a job for the chat", out
     finally:
         cane.subprocess.Popen = real
-    argv = seen[0][0][0]
-    assert "cmd" not in [os.path.basename(str(x)).lower() for x in argv], argv
-    assert argv[1] == 'x" & calc & "y', "argument was mangled"
-    assert seen[0][1].get("creationflags"), "no CREATE_NEW_CONSOLE"
+    assert seen == [], "a task spawned a process: %r" % seen
 
     # A garbage settings file must read as defaults, not crash.
     cane.SETTINGS.write_text("[not a dict]")
@@ -709,7 +707,342 @@ def check_files():
     print("files: 34 checks passed%s" % ("" if made else " (junction check skipped)"))
 
 
+def check_agent():
+    """Phase 1: tasks run in Cane's own chat through dispatch()."""
+    import agent
+    agent.CHAT = pathlib.Path(tempfile.mkdtemp()) / "chat.json"
+    n = 0
+
+    # Replies: JSON inside chatter, plain prose, unknown tools dropped.
+    p = agent.parse('Sure!\n```json\n{"say": "On it", "actions": [{"intent": '
+                    '"timer", "arg": "5 min", "action": "Minutes"}, {"intent": '
+                    '"rm_rf"}, "junk"]}\n```')
+    assert p["say"] == "On it" and p["dropped"] == 2, p
+    assert p["actions"] == [{"intent": "timer", "arg": "5", "action": "m"}], p
+    p = agent.parse("Just words, no JSON")
+    assert p == {"say": "Just words, no JSON", "actions": [], "remember": "",
+                 "dropped": 0}, p
+    p = agent.parse('{"say": "x", "actions": [{"intent": "escalate"}, '
+                    '{"intent": "ask"}, {"intent": "copilot"}]}')
+    assert p["actions"] == [], "the chat must never bounce to itself or out"
+    assert agent.clean({"intent": "volume", "arg": "40%"})["arg"] == "40"
+    n += 6
+
+    # What the model sees: alternating roles, starting with the user.
+    rows = [{"role": "assistant", "content": "a"}, {"role": "user", "content": "1"},
+            {"role": "user", "content": "2"}, {"role": "assistant", "content": "b"}]
+    assert agent.turns(rows) == [{"role": "user", "content": "1\n\n2"},
+                                 {"role": "assistant", "content": "b"}]
+    n += 1
+
+    def scripted(*replies):
+        calls = []
+
+        def complete(system, turns, timeout, effort="low"):
+            calls.append(turns)
+            r = replies[min(len(calls), len(replies)) - 1]
+            if isinstance(r, Exception):
+                raise r
+            return r, ""
+        return complete, calls
+
+    shown = []
+    show = lambda kind, t: shown.append((kind, t))
+
+    # Instant actions run without asking; the results go back to the model.
+    agent.clear()
+    complete, calls = scripted(
+        '{"say": "Setting it", "actions": [{"intent": "timer", "arg": "5", '
+        '"action": "m"}]}', '{"say": "Done - 5 min timer", "actions": []}')
+    asked = []
+    agent.converse("set a 5 min timer", show=show, complete=complete,
+                   approve=lambda a: asked.append(a) or True)
+    assert len(calls) == 2 and asked == [], (len(calls), asked)
+    assert calls[1][-1]["content"].startswith("RESULTS:\nstart a timer for 5 min"
+                                              " -> timer: 5 min"), calls[1][-1]
+    assert ("say", "Done - 5 min timer") in shown
+    # Written before the action ran, so it is never shown as fact.
+    assert ("say", "Setting it") not in shown, shown
+    n += 4
+
+    # A risky action waits for approval; declined means it never runs.
+    agent.clear()
+    ran = []
+    real_dispatch = cane.dispatch
+    cane.dispatch = lambda a, ui=None: ran.append(a) or "locked"
+    try:
+        complete, calls = scripted('{"say": "Locking", "actions": [{"intent": '
+                                   '"lock"}]}')
+        agent.converse("lock it", show=show, complete=complete,
+                       approve=lambda a: False)
+        assert ran == [] and len(calls) == 1, ran
+        agent.converse("lock it", show=show, complete=complete, approve=None)
+        assert ran == [], "ran a risky action with no way to approve it"
+        complete, calls = scripted('{"say": "Locking", "actions": [{"intent": '
+                                   '"lock"}]}', '{"say": "Locked", "actions": []}')
+        agent.converse("lock it", show=show, complete=complete,
+                       approve=lambda a: True)
+        assert ran == [{"intent": "lock"}], ran
+        n += 4
+
+        # A model that never stops acting is cut off.
+        complete, calls = scripted('{"say": "", "actions": [{"intent": "clock"}]}')
+        agent.converse("loop", show=show, complete=complete)
+        assert len(calls) == agent.MAX_STEPS, len(calls)
+        n += 1
+    finally:
+        cane.dispatch = real_dispatch
+
+    # A dead provider is reported, not raised.
+    shown.clear()
+    complete, _ = scripted(RuntimeError("NVIDIA rejected the key"))
+    agent.converse("hi", show=show, complete=complete)
+    assert shown == [("error", "Couldn't reach the model: NVIDIA rejected the key")]
+    # ...and the unanswered message is not carried into the next one.
+    assert all(r["content"] != "hi" for r in agent.load()), agent.load()
+    n += 2
+
+    # A memory is only proposed - never written by the chat itself.
+    proposed = []
+    complete, _ = scripted('{"say": "Noted", "actions": [], "remember": '
+                           '"Prefers mornings for deep work"}')
+    agent.converse("I work best in the mornings", show=show, complete=complete,
+                   propose=proposed.append)
+    assert proposed == ["Prefers mornings for deep work"], proposed
+    n += 1
+
+    # History survives a restart and a junk file reads as empty.
+    assert agent.load()[-1]["say"] == "Noted"
+    agent.CHAT.write_text("not json")
+    assert agent.load() == []
+    n += 2
+    print("agent: %d checks passed" % n)
+
+
+def check_hover():
+    """Phase 2: top-edge trigger zone and its accident guards."""
+    import hover
+    z = hover.zone(1920, 560, 24)
+    assert z == (1336, 1760), z
+    cases = [((1400, 0), True), ((1400, 1), True), ((1400, 2), False),
+             ((1800, 0), False),       # over a maximised window's close button
+             ((100, 0), False), ((1400, -5), False)]   # monitor above
+    for (x, y), want in cases:
+        assert hover.in_zone(x, y, z) is want, (x, y)
+    full = {"fullscreen": True, "browser": False}
+    assert hover.delay_for(full) is None, "opened over a full-screen app"
+    assert hover.delay_for({"fullscreen": False, "browser": True}) == hover.DELAY_BROWSER
+    assert hover.delay_for({"fullscreen": False, "browser": False}) == hover.DELAY
+    assert hover.near_bar(1500, 100, 1920, 560, 104, 24)
+    assert not hover.near_bar(900, 400, 1920, 560, 104, 24)
+    print("hover: %d checks passed" % (len(cases) + 6))
+
+
+def check_soul():
+    """Phase 3: the personality file, its memory, and where it is used."""
+    import soul
+    soul.SOUL = pathlib.Path(tempfile.mkdtemp()) / "soul.md"
+    cane.SETTINGS = pathlib.Path(tempfile.mkdtemp()) / "s.json"
+    n = 0
+    assert soul.name() == "Cane" and soul.load()["memory"] == []
+    soul.ensure()
+    assert soul.SOUL.exists()
+    n += 2
+
+    s = soul.load()
+    s.update(name="Wren", about="Panda, QA lead.\n(hint line)", rules="- Be brief.")
+    soul.save(s)
+    assert soul.parse(soul.SOUL.read_text(encoding="utf-8")) == soul.load()
+    assert soul.name() == "Wren"
+    p = soul.prompt()
+    assert "Panda, QA lead." in p and "hint line" not in p and "Be brief" in p, p
+    n += 3
+
+    assert soul.remember("Prefers mornings") and not soul.remember("prefers MORNINGS")
+    assert soul.remember("Uses Brave")
+    assert soul.load()["memory"] == ["Prefers mornings", "Uses Brave"]
+    assert soul.forget(0) == "Prefers mornings" and soul.forget(9) is None
+    assert "Uses Brave" in soul.prompt()
+    n += 5
+
+    # Hand-edited oddities: plain prose, a missing name, a blank file.
+    assert soul.parse("Just be nice.")["personality"] == "Just be nice."
+    assert soul.parse("## Identity\nCalm.\n")["name"] == "Cane"
+    assert soul.parse("")["name"] == "Cane"
+    n += 3
+
+    # Off switch: nothing of the soul goes to the provider.
+    cane.set_setting("soul", False)
+    assert soul.prompt() == ""
+    cane.set_setting("soul", True)
+    n += 1
+
+    # Answers carry it; the command router never does.
+    seen = []
+    real = cane.complete
+    cane.complete = lambda system, turns, timeout, effort="low": (
+        seen.append(system) or ("ok", ""))
+    try:
+        cane.answer("hi")
+    finally:
+        cane.complete = real
+    assert "You are Wren" in seen[0] and "Uses Brave" in seen[0], seen[0]
+    assert "Wren" not in cane.SYSTEM and "Uses Brave" not in cane.SYSTEM
+    n += 2
+    print("soul: %d checks passed" % n)
+
+
+FOCUS_QUICK = [
+    ("focus", ("focus", "start", "", "25")),
+    ("focus mode", ("focus", "start", "", "25")),
+    ("help me focus", ("focus", "start", "", "25")),
+    ("focus on the tax report for 45 min", ("focus", "start", "the tax report", "45")),
+    ("focus for 50 minutes", ("focus", "start", "", "50")),
+    ("focus 30", ("focus", "start", "", "30")),
+    ("focus for half an hour", ("focus", "start", "", "30")),
+    ("start a pomodoro", ("focus", "start", "", "25")),
+    ("focus on writing for 2 hours", ("focus", "start", "writing", "120")),
+    ("stop focus", ("focus", "stop", None, None)),
+    ("how long left", ("focus", "status", None, None)),
+    ("focus history", ("focus", "history", None, None)),
+    ("block reddit", ("block", "add", None, None)),
+    ("unblock youtube", ("block", "remove", None, None)),
+    ("what's blocked", ("block", "list", None, None)),
+]
+
+
+def check_focus():
+    """Phase 4: sessions, title matching, schedules, and the close guard."""
+    import focus
+    import winsys
+    focus.STATE = pathlib.Path(tempfile.mkdtemp()) / "focus.json"
+    focus._allow.clear()
+    n = 0
+
+    for text, (intent, action, arg, minutes) in FOCUS_QUICK:
+        hit = cane.quick(text)
+        assert hit and (hit["intent"], hit["action"]) == (intent, action), (text, hit)
+        if arg is not None:
+            assert hit["arg"] == arg and hit["minutes"] == minutes, (text, hit)
+        n += 1
+    # These belong to other features and must stay theirs.
+    for text, want in [("what's left", None), ("set a timer for 25 minutes", "timer"),
+                       ("block", None)]:
+        hit = cane.quick(text)
+        assert (hit and hit["intent"]) == want, (text, hit)
+        n += 1
+    m = cane.quick("block youtube 9-12 on weekdays")
+    assert (m["site"], m["from"], m["to"], m["days"]) == ("youtube", "9", "12",
+                                                          "weekdays"), m
+    n += 1
+
+    # Titles: whole segments only.
+    titles = [("Lofi beats - YouTube - Google Chrome", "youtube", True),
+              ("(3) YouTube - Brave", "youtube", True),
+              ("Song - YouTube Music - Google Chrome", "youtube", False),
+              ("Notes about YouTube - Google Docs - Google Chrome", "youtube", False),
+              ("Lofi - YouTube and 4 more pages - Work - Microsoft​ Edge",
+               "youtube", True),
+              ("(2) Home / X - Google Chrome", "x", True),
+              ("Home / Twitter - Google Chrome", "x", True),
+              ("SpaceX launches - Google Search - Google Chrome", "x", False),
+              ("shroud - Twitch — Mozilla Firefox", "twitch", True),
+              ("Twitch - Google Chrome", "twitch", True)]
+    for title, site, want in titles:
+        assert focus.matches(title, site) is want, (title, site)
+        n += 1
+
+    # A session: start, count down, finish on time.
+    t0 = datetime(2026, 10, 16, 10, 0)
+    focus.start("report", 25, now=t0)
+    assert round(focus.current(now=t0)["left"]) == 25
+    assert focus.blocked_now(now=t0) == {"youtube", "twitch", "x"}
+    assert focus.tick(now=t0.replace(minute=24)) is None
+    done = focus.tick(now=t0.replace(minute=25))
+    assert done["state"] == "finished" and done["minutes"] == 25, done
+    assert focus.current(now=t0.replace(minute=26)) is None
+    assert focus.blocked_now(now=t0.replace(minute=26)) == set()
+    n += 6
+
+    # Stopped early; replaced by a new one; abandoned while Cane was off.
+    focus.start("a", 25, now=t0)
+    assert focus.stop(now=t0.replace(minute=10))["minutes"] == 10
+    assert focus.stop(now=t0) is None
+    focus.start("b", 25, now=t0)
+    focus.start("c", 25, now=t0.replace(minute=5))
+    assert focus.load()["history"][-1]["task"] == "b"
+    focus.recover(now=t0.replace(hour=12))
+    assert focus.load()["history"][-1]["state"] == "abandoned"
+    for bad in (0, 481):
+        try:
+            focus.start("x", bad, now=t0)
+            raise AssertionError("accepted %d minutes" % bad)
+        except ValueError:
+            pass
+    n += 6
+
+    # Schedules, including weekdays only and one that runs past midnight.
+    focus.save(dict(focus.load(), blocks=[
+        {"site": "youtube", "start": "09:00", "end": "12:00", "days": [0, 1, 2, 3, 4]},
+        {"site": "reddit", "start": "23:00", "end": "01:00", "days": [4]}]))
+    fri = datetime(2026, 10, 16, 10, 0)            # a Friday
+    assert focus.scheduled(fri) == {"youtube"}
+    assert focus.scheduled(fri.replace(hour=12)) == set()
+    assert focus.scheduled(datetime(2026, 10, 17, 10, 0)) == set()      # Saturday
+    assert focus.scheduled(fri.replace(hour=23, minute=30)) == {"reddit"}
+    assert focus.scheduled(datetime(2026, 10, 17, 0, 30)) == {"reddit"}  # Sat early
+    assert focus.scheduled(datetime(2026, 10, 18, 0, 30)) == set()      # Sun early
+    n += 6
+
+    # "Let me through" lifts one site for a while.
+    focus.let_through("youtube", now=fri)
+    assert "youtube" not in focus.blocked_now(now=fri.replace(minute=3))
+    assert "youtube" in focus.blocked_now(now=fri.replace(minute=6))
+    n += 2
+
+    # Commands through dispatch, and schedules that make no sense.
+    assert cane.dispatch({"intent": "block", "action": "add", "site": "reddit.com"}) \
+        == "reddit is blocked during focus"
+    assert "reddit" in focus.load()["sites"]
+    out = cane.dispatch(cane.quick("block twitch 9pm-11pm on weekends"))
+    assert out == "twitch blocked 21:00-23:00 on weekends", out
+    for bad in ("block twitch 9-9", "block twitch 25-26"):
+        out = cane.dispatch(cane.quick(bad))
+        assert out.startswith("couldn't read that schedule"), (bad, out)
+    assert cane.dispatch(cane.quick("unblock reddit")) == "reddit unblocked"
+    assert cane.dispatch(cane.quick("unblock nothing")) == "nothing wasn't blocked"
+    assert cane.dispatch(cane.quick("stop focus")) == "no focus session running"
+    n += 7
+
+    # The close guard: Ctrl+W only if the same browser tab is still in front.
+    sent = []
+    real_fg, real_key = winsys.foreground, winsys.u32.keybd_event
+    winsys.u32.keybd_event = lambda *a: sent.append(a)
+    try:
+        seen = {"hwnd": 7, "browser": True, "title": "Lofi - YouTube - Google Chrome"}
+        for now_fg in ({"hwnd": 8, "browser": True, "title": seen["title"]},
+                       {"hwnd": 7, "browser": True, "title": "Docs - Google Chrome"},
+                       {"hwnd": 7, "browser": False, "title": seen["title"]}):
+            winsys.foreground = lambda f=now_fg: f
+            assert not focus.close_tab(seen, "youtube") and not sent, now_fg
+        winsys.foreground = lambda: seen
+        assert focus.close_tab(seen, "youtube") and len(sent) == 4
+    finally:
+        winsys.foreground, winsys.u32.keybd_event = real_fg, real_key
+    n += 4
+
+    # A broken focus.json reads as defaults.
+    focus.STATE.write_text("[]")
+    assert focus.load()["sites"] == focus.DEFAULT_SITES and focus.current() is None
+    n += 1
+    print("focus: %d checks passed" % n)
+
+
 if __name__ == "__main__":
+    check_agent()
+    check_hover()
+    check_soul()
+    check_focus()
     check_logic()
     check_edges()
     check_quick()

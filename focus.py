@@ -292,6 +292,14 @@ def finish_task(h):
 
 def finished(bar, h):
     """End of a session: a toast, and "Mark task done" when it was for one."""
+    if getattr(bar, "electron", False):
+        import bridge
+        text = "Focus done%s · %d min" % ((": " + h["task"]) if h["task"] else "", h["minutes"])
+        buttons = (("OK", None, not task_of(h)),)
+        if task_of(h):
+            buttons = (("OK", None, False), ("Mark task done", lambda: finish_task(h), True))
+        bridge.toast("Focus", text, buttons=buttons, kind="focus", sound=True)
+        return
     from cane import FG, ACCENT
     import winsound
     winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)
@@ -310,8 +318,18 @@ def finished(bar, h):
 
 def nudge(bar, site):
     """The toast after a block, with a way through."""
-    from cane import FG, DIM, ACCENT, FONT_SM
     sess = current()
+    if getattr(bar, "electron", False):
+        import bridge
+        msg = "%s is blocked" % site.title()
+        if sess:
+            msg += " · %d min left%s" % (round(sess["left"]),
+                                         (" on " + sess["task"]) if sess["task"] else "")
+        bridge.toast("Blocked", msg, sub="the tab was closed", kind="alert",
+                     buttons=(("Let me through %d min" % LET_THROUGH,
+                               lambda: let_through(site), False), ("OK", None, True)))
+        return
+    from cane import FG, DIM, ACCENT, FONT_SM
     w, cv, close = bar._toast(112)
     cv.create_text(24, 26, text="BLOCKED", fill=ACCENT, anchor="w",
                    font=("Segoe UI", 8, "bold"))

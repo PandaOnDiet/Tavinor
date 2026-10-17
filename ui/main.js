@@ -7,7 +7,7 @@ const path = require('path');
 
 const PORT = Number(process.env.TAVINOR_PORT);
 const TOKEN = process.env.TAVINOR_UI_TOKEN;
-const W = 640, H = 660;               // room for the head, the pill and a card
+const W = 640, H = 900;               // head, pill, a card and up to 3 toasts
 
 if (!PORT || !TOKEN || !app.requestSingleInstanceLock()) {
   console.error('Start Tavinor with cane.py; it launches this window.');

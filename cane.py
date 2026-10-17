@@ -2198,6 +2198,12 @@ class Bar:
 
     def confirm(self, title, lines, on_yes):
         """Do it / Cancel, for something that must be approved first."""
+        if self.electron:
+            bridge.toast(title.title(), lines[0] if lines else "", sub="\n".join(lines[1:]),
+                         buttons=(("Cancel", None, False), ("Do it", on_yes, True)),
+                         kind="ask", sound=True)
+            return
+
         def make():
             h = 92 + 22 * len(lines)
             w, cv, close = self._toast(h)
@@ -2279,6 +2285,12 @@ class Bar:
     def _list_window(self, items):
         # Only ever one list open, else repeated "what's left" walks new
         # windows down and off the bottom of the screen.
+        if self.electron:
+            bridge.toast("Open", "" if items else "nothing open", rows=[
+                ("%d  %s%s" % (n, "↳ " if i.get("parent") else "", i["text"][:60]),
+                 datetime.fromisoformat(i["due"]).strftime("%a %H:%M") if i["due"] else "")
+                for n, i in enumerate(items, 1)])
+            return
         if getattr(self, "_close_list", None):
             self._close_list()
         rows = []
@@ -2318,6 +2330,12 @@ class Bar:
     def alert(self, item, title="REMINDER"):
         """Pop a fired reminder or timer. Stays until dismissed - it is the
         point - and makes a sound, since you may be looking elsewhere."""
+        if self.electron:
+            buttons = ((("Dismiss", None, False), ("Done", lambda: mark_done(item["text"]), True))
+                       if title == "REMINDER" else (("OK", None, True),))
+            bridge.toast(title.title(), item["text"], buttons=buttons, sound=True,
+                         kind="alert" if title in ("PANIC KEY",) else "info")
+            return
         winsound.PlaySound("SystemNotification",
                            winsound.SND_ALIAS | winsound.SND_ASYNC)
         w, cv, close = self._toast(112)
@@ -2338,6 +2356,8 @@ class Bar:
     def _plan_window(self, plan):
         """The approval step. Nothing has moved yet; "Do it" re-checks every
         file before moving it, and Cancel or a click elsewhere drops the plan."""
+        if self.electron:
+            return self._plan_toast(plan)
         if getattr(self, "_close_plan", None):
             self._close_plan()
         groups, shown = plan["groups"], plan["groups"][:8]
@@ -2402,7 +2422,45 @@ class Bar:
         cv.create_window(self.W - 150, h - 22, anchor="e",
                          window=self._button(w, "Details", details))
 
+    def _plan_toast(self, plan):
+        """The plan approval in the notch: same facts, same buttons."""
+        groups = plan["groups"]
+        n = sum(len(g["moves"]) for g in groups)
+        rows = [("%d  %s" % (len(g["moves"]), g["label"][:28]), "→ " + g["where"][:36])
+                for g in groups[:8]]
+        if len(groups) > 8:
+            rows.append(("+ %d more groups - see Details" % (len(groups) - 8), ""))
+        safety = "%d left where they are · nothing is deleted · Undo afterwards" % (
+            plan["total"] - n)
+        if plan["dropped"]:
+            safety += " · %d unsafe suggestion%s dropped" % (
+                plan["dropped"], "" if plan["dropped"] == 1 else "s")
+
+        def details():
+            lines = []
+            for g in groups:
+                lines.append("# %s → %s" % (g["label"], g["where"]))
+                lines += ["    " + src.name for src, _ in g["moves"]]
+            self._answer_window(plan["request"], "\n".join(lines), title="DETAILS",
+                                limit=60000)
+            self._plan_toast(plan)                 # keep the decision on screen
+
+        def do_it():
+            moved, skipped = execute_plan(plan)
+            self._moved_window(moved, skipped)
+        bridge.toast("Plan", "%d files in %s" % (plan["total"], plan["source"].title()),
+                     sub=safety + ("\n" + plan["note"].strip()[:80] if plan.get("note") else ""),
+                     rows=rows, kind="ask",
+                     buttons=(("Details", details, False), ("Cancel", None, False),
+                              ("Do it", do_it, True)))
+
     def _moved_window(self, moved, skipped):
+        if self.electron:
+            undo = lambda: bridge.publish("status", {"text": dispatch({"intent": "undo"}, self)})
+            bridge.toast("Done", "Moved %d file%s" % (len(moved), "" if len(moved) == 1 else "s"),
+                         sub=("%d skipped - %s" % (len(skipped), skipped[0][1])) if skipped else "",
+                         buttons=((("Undo", undo, False),) if moved else ()) + (("OK", None, True),))
+            return
         # Replace the "moving..." the bar has shown since Do it.
         self.label.config(text="moved %d file%s%s" % (
             len(moved), "" if len(moved) == 1 else "s",
@@ -2988,6 +3046,10 @@ class Bar:
     def _answer_window(self, question, text, title="ANSWER", limit=4000):
         """A scrollable text panel. As ANSWER it names the model and offers
         Ask Copilot; with another title (a plan's DETAILS) it just shows."""
+        if self.electron:
+            bridge.publish("answer", {"question": question, "text": text[:limit],
+                                      "title": title.title()})
+            return
         if getattr(self, "_close_answer", None):
             self._close_answer()            # one answer at a time
         text = text[:limit]

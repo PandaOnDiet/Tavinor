@@ -48,16 +48,22 @@ async function grab() {
   shot = await window.tav.backdrop();
   shotAt = Date.now();
   if (shot) {
-    for (const bd of document.querySelectorAll('.bd')) {
-      const el = bd.parentElement;
-      const i = bd.firstElementChild;
-      i.style.left = -(20 + el.offsetLeft) + 'px';
-      i.style.top = -el.offsetTop + 'px';
-      i.style.backgroundImage = `url("${shot}")`;
-    }
+    for (const bd of document.querySelectorAll('.bd')) paint(bd);
     document.body.classList.add('has-bd');
   }
   return shot;
+}
+
+// Line one glass piece's blurred picture up with the screen behind it.
+function paint(bd) {
+  if (!shot) return;
+  const el = bd.parentElement;
+  let x = 20 + el.offsetLeft, y = el.offsetTop;
+  if (el.classList.contains('toast')) { x += $('toasts').offsetLeft - 20; y += $('toasts').offsetTop; }
+  const i = bd.firstElementChild;
+  i.style.left = -x + 'px';
+  i.style.top = -y + 'px';
+  i.style.backgroundImage = `url("${shot}")`;
 }
 
 // ---------------------------------------------------------------- open/close
@@ -77,6 +83,7 @@ async function openNow(focusInput) {
     window.tav.opened(true);
     showToday();
   }
+  layoutToasts();
   setInteractive(true);
   if (focusInput) { window.tav.focus(); q.focus(); }
 }
@@ -90,6 +97,60 @@ function close() {
   q.blur();
   setInteractive(false);
   setTimeout(() => { if (!open) { reply.hidden = true; today.hidden = false; } }, 400);
+  layoutToasts();
+}
+
+// ---------------------------------------------------------------- toasts
+const toastBox = $('toasts');
+const peeking = () => toastBox.children.length > 0;
+
+function layoutToasts() {
+  // Closed: right under the head, which peeks down while any toast is up.
+  // Open: under whichever card shows.
+  let top = 168;
+  if (open) {
+    const card = reply.hidden ? today : reply;
+    top = card.offsetTop + card.offsetHeight + 12;
+  }
+  toastBox.style.top = top + 'px';
+  w.classList.toggle('peek', peeking() && !open);
+}
+
+async function showToast(t) {
+  if (!open) await Promise.race([grab(), new Promise((r) => setTimeout(r, 300))]);
+  const box = el('div', 'toast glass k-' + (t.kind || 'info'));
+  const bd = el('div', 'bd'); bd.append(el('i'));
+  box.append(bd, el('div', 'eyebrow', t.title));
+  if (t.text) box.append(el('div', 't', t.text));
+  if (t.sub) box.append(el('div', 's', t.sub));
+  if (t.rows && t.rows.length) {
+    const rows = el('div', 'rows');
+    for (const [a, b] of t.rows) { const r = el('div', 'r'); r.append(el('span', '', a), el('span', '', b || '')); rows.append(r); }
+    box.append(rows);
+  }
+  const acts = el('div', 'acts');
+  for (const b of t.buttons) {
+    const btn = el('button', 'btn ' + (b.primary ? 'white' : 'ghost'), b.label);
+    btn.type = 'button';
+    btn.addEventListener('click', () => {
+      window.tav.call('toast_click', { id: t.id, button: b.id }).catch(() => {});
+      box.classList.add('out');
+      setTimeout(() => { box.remove(); layoutToasts(); if (!peeking() && !open) setInteractive(false); }, 280);
+    });
+    acts.append(btn);
+  }
+  box.append(acts);
+  toastBox.prepend(box);
+  while (toastBox.children.length > 3) toastBox.lastElementChild.remove();
+  layoutToasts();
+  for (const x of toastBox.querySelectorAll('.bd')) paint(x);
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
 }
 
 function closeSoon(ms) {
@@ -104,10 +165,12 @@ function setInteractive(on) {
 // The window ignores the mouse except over the notch itself; Electron still
 // forwards moves, so this sees the cursor everywhere over the window.
 document.addEventListener('mousemove', (e) => {
-  const over = e.target.closest && e.target.closest(open ? '.head, .pill, .card' : '.zone, .lip');
+  const over = e.target.closest && e.target.closest(
+    open ? '.head, .pill, .card, .toast' : peeking() ? '.zone, .lip, .head, .toast' : '.zone, .lip');
+  const onToast = over && over.classList.contains('toast');
   setInteractive(!!over);
   if (!open) {
-    if (over && !dwellTimer && config.hover) {
+    if (over && !onToast && !dwellTimer && config.hover) {
       grab();                                  // start the picture early
       dwellTimer = setTimeout(() => { dwellTimer = null; openNow(false); }, config.hover_slow ? 420 : 160);
     } else if (!over && dwellTimer) {
@@ -183,7 +246,8 @@ async function refreshDay() {
 function showToday() {
   reply.hidden = true;
   today.hidden = false;
-  refreshDay();
+  refreshDay().then(layoutToasts);
+  layoutToasts();
 }
 
 function showReply(question, text) {
@@ -191,6 +255,7 @@ function showReply(question, text) {
   $('reply-a').textContent = text || '…';
   today.hidden = true;
   reply.hidden = false;
+  layoutToasts();
 }
 
 // ---------------------------------------------------------------- asking
@@ -230,5 +295,6 @@ window.tav.on('events', (evs) => {
     else if (e.kind === 'open') openNow(true);
     else if (e.kind === 'hide') close();
     else if (e.kind === 'config') config = d;
+    else if (e.kind === 'toast') showToast(d);
   }
 });

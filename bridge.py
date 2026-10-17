@@ -166,6 +166,35 @@ class Remote:
         publish("hide")
 
 
+_TOASTS = {}                 # toast id -> {button id: callable or None}
+
+
+def toast(title, text, sub="", buttons=(("OK", None, False),), rows=None,
+          kind="info", sound=False):
+    """Show a toast in the notch. `buttons`: (label, fn or None, primary);
+    fn runs in a thread when pressed, None just dismisses. `rows`: optional
+    [(left, right)] lines. Returns the toast id."""
+    tid = secrets.token_hex(4)
+    _TOASTS[tid] = {str(i): b[1] for i, b in enumerate(buttons)}
+    while len(_TOASTS) > 50:                      # never-clicked ones
+        _TOASTS.pop(next(iter(_TOASTS)))
+    if sound:
+        import winsound
+        winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)
+    publish("toast", {"id": tid, "title": title, "text": str(text)[:300], "sub": str(sub or "")[:200],
+                      "kind": kind, "rows": [list(map(str, r)) for r in (rows or [])][:12],
+                      "buttons": [{"id": str(i), "label": b[0], "primary": bool(b[2])}
+                                  for i, b in enumerate(buttons)]})
+    return tid
+
+
+def toast_click(tid, button):
+    fn = _TOASTS.pop(tid, {}).get(str(button))
+    if fn:
+        threading.Thread(target=fn, daemon=True).start()
+    return {"ok": True}
+
+
 def ui_day():
     """The Today card: open tasks, the next meeting, focus, a habit."""
     import focus
@@ -231,6 +260,8 @@ def ui_call(bar, tool, args):
         return {"ok": True}
     if tool == "day":
         return ui_day()
+    if tool == "toast_click":
+        return toast_click(str(args.get("id", "")), args.get("button"))
     if tool == "done":
         return {"text": mark_done_key(str(args.get("key", "")))}
     if tool == "settings":

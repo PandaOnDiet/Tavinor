@@ -162,6 +162,13 @@ def watch(bar):
 
 
 def nudge(bar, h):
+    if getattr(bar, "electron", False):
+        import bridge
+        s = streak(h)
+        bridge.toast("Habit", h["name"], kind="habit", sound=True,
+                     sub=("%d-day streak - keep it going" % s) if s else "not done yet today",
+                     buttons=(("Later", None, False), ("Done", lambda: checkin(h["name"]), True)))
+        return
     from cane import FG, DIM, ACCENT, FONT_SM
     import winsound
     winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)

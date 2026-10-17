@@ -45,8 +45,48 @@ function txt(label, desc) {
   return t;
 }
 
+// Section icons: stroke paths on a 24-unit grid, and each one's tint.
+const ICONS = {
+  chat: ['M5 6.5A2.5 2.5 0 017.5 4h9A2.5 2.5 0 0119 6.5v6a2.5 2.5 0 01-2.5 2.5H11l-4 3.5V15h0a2.5 2.5 0 01-2-2.5z', '#4c8dff'],
+  brain: ['M9 4.5a3 3 0 00-3 3v.3A3 3 0 004.5 13a3 3 0 002.2 2.9A3 3 0 0012 18V6a2.5 2.5 0 00-3-1.5zM15 4.5a3 3 0 013 3v.3a3 3 0 011.5 5.2 3 3 0 01-2.2 2.9A3 3 0 0112 18', '#a078ff'],
+  person: ['M12 12a4 4 0 100-8 4 4 0 000 8zM4.5 20a7.5 7.5 0 0115 0', '#4c8dff'],
+  shield: ['M12 3.5l7 3v5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9v-5z', '#ff8a3d'],
+  focus: ['M12 20a8 8 0 100-16 8 8 0 000 16zM12 8v4l2.5 2', '#3fd2c7'],
+  mic: ['M9 6a3 3 0 016 0v5a3 3 0 01-6 0zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21', '#a078ff'],
+  calendar: ['M5 6.5h14v13H5zM5 10.5h14M9 4v4M15 4v4', '#4c8dff'],
+  chart: ['M4.5 19.5h15M7 16v-4M11.5 16V8M16 16v-6', '#46d28c'],
+  sliders: ['M5 8h9M18 8h1M5 16h3M12 16h7M14 6v4M8 14v4', '#9aa3b5'],
+};
+
+function icon(name) {
+  const [d, tint] = ICONS[name] || ICONS.sliders;
+  const ns = 'http://www.w3.org/2000/svg';
+  const box = el('span', 'ic');
+  box.style.background = tint + '2e';
+  box.style.color = tint;
+  const s = document.createElementNS(ns, 'svg');
+  for (const [k, v] of [['width', 16], ['height', 16], ['viewBox', '0 0 24 24'], ['fill', 'none'],
+    ['stroke', 'currentColor'], ['stroke-width', 1.9], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'],
+    ['aria-hidden', 'true']]) s.setAttribute(k, v);
+  const path = document.createElementNS(ns, 'path');
+  path.setAttribute('d', d);
+  s.append(path);
+  box.append(s);
+  return box;
+}
+
 // ---------------------------------------------------------------- row types
 const ROWS = {
+  nav(it) {
+    const r = el('button', 'row nav');
+    r.type = 'button';
+    r.append(icon(it.icon), el('span', 'lb grow', it.label));
+    if (it.value) r.append(el('span', 'val', it.value));
+    r.append(el('span', 'chev', '›'));
+    r.addEventListener('click', () => (it.action ? set(it.id, true) : load(it.id, 'in')));
+    return r;
+  },
+
   toggle(it) {
     const r = el('div', 'row');
     const sw = el('button', 'sw');

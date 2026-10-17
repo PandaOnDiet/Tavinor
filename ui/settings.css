@@ -83,3 +83,10 @@ select.f option { background: #1a1d27; color: #f4f6fb; }
 @keyframes up { from { transform: translateY(40px); opacity: 0; } }
 .sheet-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .sheet pre { margin: 0; overflow: auto; font: 12px 'Cascadia Mono', Consolas, monospace; color: #dfe4ee; white-space: pre-wrap; user-select: text; }
+
+/* the first screen: one calm row per section, like the approved design */
+.row.nav { padding: 10px 14px; }
+.ic { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex: none; }
+.grow { flex: 1; min-width: 0; }
+.val { font-size: 13px; color: rgba(232, 236, 245, .55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
+.row .txt .ds:empty { display: none; }

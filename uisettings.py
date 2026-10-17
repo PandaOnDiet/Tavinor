@@ -48,39 +48,53 @@ def B(rid, label, confirm=None, note=""):
 
 # ------------------------------------------------------------------ pages
 
+def N(page, label, value, icon):
+    """A section on the first screen: icon, name, its current value, arrow."""
+    return {"type": "nav", "id": page, "label": label, "value": value, "icon": icon}
+
+
 def page_main():
-    import access, activity, gcal, notes, soul
+    """The first screen: three quick switches, then one row per section.
+    No descriptions here - they live inside each section."""
+    import access, activity, focus, gcal, soul, voice
     started = (cane.STARTUP / "Tavinor.vbs").exists() or (cane.STARTUP / cane.OLD_VBS).exists()
+    s = soul.load()
+    preset = next((k for k, v in soul.PRESETS.items() if v == s["personality"].strip()), "custom")
+    p = cane.provider()
+    model = cane.current_model(p).split("/")[-1]
+    fs = focus.load()
+    return {"title": "Settings", "sections": [
+        {"items": [
+            T("startup", "Start with Windows", "", started),
+            T("hover", "Hover to open", "", cane.setting("hover", True)),
+            T("wake", "\"Hey %s\"" % s["name"], "", cane.setting("wake", False)),
+        ]},
+        {"items": [
+            dict(N("chat", "Chats", "", "chat"), action=True),
+            N("brain", "Brain", "%s · %s" % (cane.PROVIDERS[p][0], model), "brain"),
+            N("personality", "Personality", "%s · %s" % (s["name"], preset.lower()), "person"),
+            N("access", "Permissions", access.level().title(), "shield"),
+        ]},
+        {"items": [
+            N("sites", "Focus & blocked sites", "%d site%s" % (
+                len(fs["sites"]), "" if len(fs["sites"]) == 1 else "s"), "focus"),
+            N("voice", "Voice", "Whisper" if voice.engine() == "whisper" else "Windows", "mic"),
+            N("calendar", "Calendar", "Connected" if gcal.signed_in() else "Not connected", "calendar"),
+            N("activity", "Activity", "On" if activity.on() else "Off", "chart"),
+            N("general", "General", "", "sliders"),
+        ]},
+    ]}
+
+
+def page_brain():
+    """What answers: provider, key, model; whether answers go to the cloud;
+    how notes are searched."""
+    import notes
     p = cane.provider()
     keyed = p != "ollama"
     k = cane.key_get(p) if keyed else None
-    return {"title": "Settings", "sections": [
-        {"items": [
-            T("startup", "Start with Windows", "Tavinor opens in the tray when you log in", started),
-            T("cloud_answers", "Cloud answers",
-              "Questions go to the provider below. Off: Tavinor opens Copilot instead",
-              cane.setting("cloud_answers", True)),
-            T("hover", "Hover to open", "Touch the top edge above the notch. Never over "
-              "full-screen apps", cane.setting("hover", True)),
-            T("hover_slow", "Hover needs a longer rest",
-              "Fewer accidental opens: waits about twice as long", cane.setting("hover_slow", False)),
-            T("claude", "Claude Code button in chat",
-              "Adds \"Hand to Claude Code\" to the chat. Nothing goes to it unless you press it",
-              cane.setting("claude", False)),
-        ]},
-        {"items": [
-            L("personality", "Personality", soul.name() + " · name, how it talks, your rules"),
-            L("sites", "Focus & blocked sites", "what focus mode closes, and when"),
-            L("voice", "Voice", "push to talk, read aloud, \"Hey %s\"" % soul.name()),
-            L("access", "Screen access", access.level().title() + " · what it may read, type and click"),
-            L("activity", "Activity", ("On" if activity.on() else "Off") + " · what you use, minute by minute"),
-            L("calendar", "Calendar", "Google · " + ("connected" if gcal.signed_in() else "not connected")),
-            L("notes", "Notes", "search by meaning: " + ("on this laptop" if notes.source() == "ollama"
-                                                        else "your provider, then this laptop")),
-            L("features", "Features", "switch single commands on or off"),
-            {"type": "link", "id": "chat", "label": "Chat", "desc": "tasks done by your answer provider",
-             "action": True},
-        ]},
+    rows = notes.load()
+    return {"title": "Brain", "sections": [
         {"title": "Answers", "items": [
             {"type": "select", "id": "provider", "label": "Provider", "value": p,
              "options": [{"value": key, "label": v[0]} for key, v in cane.PROVIDERS.items()]},
@@ -88,12 +102,32 @@ def page_main():
              "disabled": not keyed, "value": "",
              "placeholder": "paste a key" if keyed else "not needed for Ollama",
              "desc": ("saved in Windows Credential Manager ····" + k[-4:]) if k else
-                     ("no key saved - paste one and press Save" if keyed else "")},
+                     ("no key saved" if keyed else "")},
             {"type": "combo", "id": "model", "label": "Model", "value": cane.current_model(p),
              "options_from": "models"},
-            B("test", "Test", note="checks it answers and can do tasks"),
+            B("test", "Test", note="answers, and can do tasks"),
         ]},
-    ], "footer": "Changes apply straight away"}
+        {"items": [
+            T("cloud_answers", "Cloud answers",
+              "Off: questions open Copilot instead", cane.setting("cloud_answers", True)),
+            T("embed", "Search notes on this laptop only",
+              "%d notes · off: your provider's embedding model first" % len(rows),
+              notes.source() == "ollama"),
+        ]},
+    ]}
+
+
+def page_general():
+    return {"title": "General", "sections": [
+        {"items": [
+            T("hover_slow", "Hover needs a longer rest", "Fewer accidental opens",
+              cane.setting("hover_slow", False)),
+            T("claude", "Claude Code button in chat", "Nothing goes to it unless you press it",
+              cane.setting("claude", False)),
+        ]},
+        {"title": "Features", "items": [T("feature:" + key, label, "", cane.feature_on(key))
+                                        for key, label, _ in cane.FEATURES]},
+    ]}
 
 
 def page_personality():
@@ -163,7 +197,7 @@ def page_voice():
 
 def page_access():
     import access
-    return {"title": "Screen access", "sections": [
+    return {"title": "Permissions", "sections": [
         {"items": [
             {"type": "radio", "id": "level", "value": access.level(), "options": [
                 {"value": "off", "label": "Off", "desc": "No reading, typing, clicking or running."},
@@ -265,7 +299,8 @@ def page_features():
     ]}
 
 
-PAGES = {"main": page_main, "personality": page_personality, "sites": page_sites,
+PAGES = {"main": page_main, "brain": page_brain, "general": page_general,
+         "personality": page_personality, "sites": page_sites,
          "voice": page_voice, "access": page_access, "activity": page_activity,
          "calendar": page_calendar, "notes": page_notes, "features": page_features}
 

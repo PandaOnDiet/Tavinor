@@ -209,11 +209,16 @@ def maybe_speak(text):
 _busy = threading.Lock()
 
 
-def push_to_talk(bar):
-    """Listen once and run what was heard as if typed into the bar."""
+def push_to_talk(bar, heard=None):
+    """Listen once and run what was heard as if typed into the bar.
+    `heard(text)` takes it instead of the bar: the Electron UI, whose `bar`
+    is a bridge.Remote that reports status and face changes."""
     if not ears_allowed():
-        bar.root.after(0, lambda: (bar.show(), bar.status(
-            "the microphone is off - Screen access is set to Off", keep=True)))
+        msg = "the microphone is off - Screen access is set to Off"
+        if heard:
+            bar.status(msg, keep=True)
+        else:
+            bar.root.after(0, lambda: (bar.show(), bar.status(msg, keep=True)))
         return
     if not _busy.acquire(blocking=False):
         return                               # already listening
@@ -221,8 +226,11 @@ def push_to_talk(bar):
 
     def go():
         try:
-            bar.root.after(0, lambda: (bar.show(), bar.label.config(
-                text="listening… speak now"), bar.set_face("listening")))
+            if heard:
+                bar.set_face("listening")
+            else:
+                bar.root.after(0, lambda: (bar.show(), bar.label.config(
+                    text="listening… speak now"), bar.set_face("listening")))
             text, conf = listen_once()
             if not text:
                 bar.status("didn't catch that", keep=True)
@@ -234,7 +242,10 @@ def push_to_talk(bar):
                 bar.entry.insert(0, text)
                 bar.set_face("thinking")
                 bar.submit(None)
-            bar.root.after(0, submit)
+            if heard:
+                heard(text)
+            else:
+                bar.root.after(0, submit)
         finally:
             _busy.release()
     threading.Thread(target=go, daemon=True).start()

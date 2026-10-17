@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'">
+<title>Tavinor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="w" id="w">
+  <div class="zone" id="zone"></div>
+  <div class="lip glass"><div class="bd"><i></i></div></div>
+
+  <div class="head glass" id="head">
+    <div class="bd"><i></i></div>
+    <div class="face s-idle" id="face">
+      <div class="eyes" id="eyes"><div class="eye l"></div><div class="eye r"></div></div>
+      <div class="mouth"></div>
+      <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="z" aria-hidden="true">z</div>
+    </div>
+    <div class="timer" id="timer"></div>
+  </div>
+
+  <div class="pill glass" id="pill">
+    <div class="bd"><i></i></div>
+    <button class="ib" id="btn-settings" type="button" aria-label="Settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/></svg>
+    </button>
+    <label class="sr" for="q">Ask Tavinor</label>
+    <input id="q" class="q" autocomplete="off" spellcheck="false" placeholder="Ask Tavinor, or tell it what to do">
+    <div class="wave" id="wave" hidden><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>Listening… speak now</span></div>
+    <button class="ib" id="btn-mic" type="button" aria-label="Talk">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg>
+    </button>
+  </div>
+
+  <div class="card glass" id="today">
+    <div class="bd"><i></i></div>
+    <div class="hrow"><span class="eyebrow" id="today-date">Today</span><span class="meta" id="today-count"></span></div>
+    <div class="next" id="next" hidden>
+      <div class="cal"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></div>
+      <div class="grow"><div class="t1" id="next-title"></div><div class="t2" id="next-when"></div></div>
+    </div>
+    <div class="tasks" id="tasks"></div>
+    <div class="empty" id="empty" hidden>Nothing open. Type “task: …” to add one.</div>
+    <div class="acts">
+      <button class="btn white" id="btn-focus" type="button">Focus 25 min
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>
+      </button>
+      <button class="btn ghost" id="btn-plan" type="button">Plan my day</button>
+      <span class="chip" id="habit" hidden></span>
+    </div>
+  </div>
+
+  <div class="card glass" id="reply" hidden>
+    <div class="bd"><i></i></div>
+    <div class="you" id="reply-q"></div>
+    <div class="ans" id="reply-a"></div>
+    <div class="acts"><button class="btn ghost" id="btn-back" type="button">Back to today</button></div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -18,6 +18,7 @@ Stdlib only. Needs ollama running locally.
 import ctypes
 import ctypes.wintypes
 from ctypes import wintypes
+import atexit
 import difflib
 import json
 import os
@@ -2001,6 +2002,7 @@ class Bar:
         self.rows, self.sel, self.thread, self._idle_id = [], 0, [], None
         # Read by hover.loop on its own thread - plain attributes, no Tk calls.
         self.visible = self.hover_opened = self.engaged = False
+        self.electron = False        # True while the Electron notch runs
         self.bar_height = self.H
         cv = make_panel(self.root, self.W, self.H + 10 + self.ROW * self.ROWS,
                         rect_h=self.H)
@@ -2215,6 +2217,16 @@ class Bar:
     def set_face(self, state):
         """Thread-safe: the face changes on the UI thread."""
         self.root.after(0, lambda: self.face.set(state))
+
+    def open_main(self):
+        """Hotkey and tray click: the Electron notch when it runs, else the bar."""
+        if self.electron:
+            # Only the process that got the hotkey may take the foreground;
+            # without this the notch opened but typing went elsewhere.
+            ctypes.windll.user32.AllowSetForegroundWindow(-1)   # ASFW_ANY
+            bridge.publish("open")
+        else:
+            self.root.after(0, self.show)
 
     def submit(self, _):
         if self.rows:                    # Enter takes the highlighted row
@@ -3117,12 +3129,16 @@ def tray_loop(bar):
         if msg == WM_HOTKEY and wp == 2:
             access.panic(bar)
         elif msg == WM_HOTKEY and wp == 3:
-            voice.push_to_talk(bar)
+            if bar.electron:
+                bridge.publish("open")
+                bridge.ui_call(bar, "mic", {})
+            else:
+                voice.push_to_talk(bar)
         elif msg == WM_HOTKEY:
-            bar.root.after(0, bar.show)
+            bar.open_main()
         elif msg == WM_TRAY and lp in (WM_LBUTTONUP, WM_RBUTTONUP):
             if lp == WM_LBUTTONUP:
-                bar.root.after(0, bar.show)
+                bar.open_main()
             else:
                 menu = u32.CreatePopupMenu()
                 u32.AppendMenuW(menu, 0, ID_OPEN, "Open Tavinor\tCtrl+Alt+Space")
@@ -3203,6 +3219,45 @@ STARTUP = Path(os.path.expandvars(
     r"%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"))
 
 
+# ---------------------------------------------------------------- electron
+
+UI_DIR = Path(__file__).with_name("ui")
+ELECTRON = UI_DIR / "node_modules" / "electron" / "dist" / "electron.exe"
+
+
+def start_ui(bar, port):
+    """Launch the Electron front end (phase E1) if it is installed and on.
+    Returns the process, or None - then the Tk bar does everything."""
+    if not setting("ui_electron", True) or not ELECTRON.exists():
+        return None
+    env = dict(os.environ, TAVINOR_PORT=str(port), TAVINOR_UI_TOKEN=bridge.UI_TOKEN)
+    env.pop("ELECTRON_RUN_AS_NODE", None)
+    launch = lambda: subprocess.Popen([str(ELECTRON), str(UI_DIR)], env=env,
+                                      cwd=str(UI_DIR))
+    procs = [launch()]
+    bar.electron = True
+
+    def watch():
+        # A quick exit is usually the previous Electron still holding the
+        # single-instance lock (it quits ~3 s after its Python goes away):
+        # live, the notch never appeared after a fast restart. Try again.
+        for _ in range(3):
+            t0 = time.monotonic()
+            procs[-1].wait()
+            if not bar.electron or time.monotonic() - t0 > 10:
+                break
+            time.sleep(4)
+            procs.append(launch())
+        else:
+            procs[-1].wait()
+        if bar.electron:                     # it died, not us quitting
+            bar.electron = False
+            threading.Thread(target=hover.loop, args=(bar,), daemon=True).start()
+    threading.Thread(target=watch, daemon=True).start()
+    atexit.register(lambda: procs[-1].poll() is None and procs[-1].kill())
+    return procs[0]
+
+
 OLD_VBS = "Cane.vbs"       # the launcher's name before the rename
 
 
@@ -3251,11 +3306,15 @@ if __name__ == "__main__":
         sys.exit()
 
     bar = Bar()
+    face.LISTENERS.append(lambda s: bridge.publish("face", s))
+    srv = bridge.serve(bridge.approver(bar), face=bar.set_face, ui=bar)
+    ui_proc = start_ui(bar, srv.server_port)
     threading.Thread(target=tray_loop, args=(bar,), daemon=True).start()
     threading.Thread(target=reminder_loop, args=(bar,), daemon=True).start()
     threading.Thread(target=warmup, daemon=True).start()
     threading.Thread(target=index_apps, daemon=True).start()
-    threading.Thread(target=hover.loop, args=(bar,), daemon=True).start()
+    if not ui_proc:                          # the notch does its own hover
+        threading.Thread(target=hover.loop, args=(bar,), daemon=True).start()
     threading.Thread(target=focus.watch, args=(bar,), daemon=True).start()
     threading.Thread(target=tasks.watch, args=(bar,), daemon=True).start()
     threading.Thread(target=activity.watch, args=(bar,), daemon=True).start()
@@ -3265,7 +3324,6 @@ if __name__ == "__main__":
     threading.Thread(target=gcal.reminders, args=(bar,), daemon=True).start()
     if (STARTUP / OLD_VBS).exists():
         install_startup()                    # Cane.vbs -> Tavinor.vbs, once
-    bridge.serve(bridge.approver(bar), face=bar.set_face)   # for mcp_server.py
     soul.ensure()
     # Start hidden: it lives in the tray, and at login nothing should appear.
     if "--show" in sys.argv:

@@ -107,8 +107,139 @@ def call(tool, args, approve, face=None):
         if tool in WRITES else out
 
 
-def serve(approve, face=None):
-    """Start the endpoint; returns the server. `approve` as in call()."""
+# ------------------------------------------------------------ the UI (E1)
+# The Electron front end uses this same server with its OWN token, handed to
+# it at launch in an environment variable and never written to disk. It can
+# run any command (it is the bar), so an agent holding bridge.json's token
+# must not be able to use it - that would skip the Do it / Cancel approval.
+UI_TOKEN = secrets.token_urlsafe(24)
+_EV, _EV_N, _FACE = [], 0, "idle"
+_EV_COND = threading.Condition()
+
+
+def publish(kind, data=None):
+    """Queue an event for the UI (status text, an answer, a face change)."""
+    global _EV_N, _FACE
+    with _EV_COND:
+        _EV_N += 1
+        if kind == "face":
+            _FACE = data
+        _EV.append((_EV_N, kind, data))
+        del _EV[:-200]
+        _EV_COND.notify_all()
+
+
+def events(after, wait=20.0):
+    """Events newer than `after`; waits up to `wait` s for the first one."""
+    with _EV_COND:
+        if not any(i > after for i, _, _ in _EV):
+            _EV_COND.wait(wait)
+        return [{"id": i, "kind": k, "data": d} for i, k, d in _EV if i > after]
+
+
+ERROR_RE = r"(error|couldn'?t|could not|failed|model offline)"
+
+
+class Remote:
+    """What run() and push_to_talk() talk to for a request from the UI:
+    results become events; anything else (Settings, the chat window) is
+    still the Tk bar's until phases E2-E4."""
+
+    def __init__(self, bar):
+        self.bar = bar
+
+    def __getattr__(self, name):
+        return getattr(self.bar, name)
+
+    def status(self, msg, keep=False):
+        import re
+        publish("status", {"text": msg})
+        self.bar.set_face("error" if re.match(ERROR_RE, msg) else "done")
+
+    def show_answer(self, question, text):
+        publish("answer", {"question": question, "text": text})
+
+    def hide(self):
+        publish("hide")
+
+    def unfocus(self):
+        publish("hide")
+
+
+def ui_day():
+    """The Today card: open tasks, the next meeting, focus, a habit."""
+    import focus
+    import gcal
+    import tasks
+    today = date.today().isoformat()
+    out = {"tasks": [{"key": i["created"], "text": i["text"], "due": i.get("due"),
+                      "sub": bool(i.get("parent"))} for i in cane.open_items()][:6],
+           "open": len(cane.open_items()), "next": None, "focus": None, "habit": None}
+    f = focus.current()
+    if f:
+        out["focus"] = {"task": f["task"], "left": round(f["left"])}
+    for h in tasks.load_habits():
+        if not h["archived"] and today not in h["checkins"]:
+            out["habit"] = h["name"]
+            break
+    if gcal.signed_in():
+        try:
+            now = datetime.now()
+            for e in gcal.events(date.today(), date.today() + timedelta(days=1)):
+                if not e["all_day"] and e["end"].replace(tzinfo=None) > now:
+                    out["next"] = {"title": e["title"], "start": e["start"].strftime("%H:%M"),
+                                   "end": e["end"].strftime("%H:%M")}
+                    break
+        except Exception:
+            pass
+    return out
+
+
+def mark_done_key(key):
+    """Tick off one open item by its `created` stamp. Returns its text."""
+    with cane._LOCK:
+        items = cane.load()
+        for i in items:
+            if not i["done"] and i["created"] == key:
+                i["done"] = True
+                cane.save(items)
+                return i["text"]
+    return None
+
+
+def ui_call(bar, tool, args):
+    if tool == "hello":
+        import soul
+        with _EV_COND:
+            return {"last": _EV_N, "face": _FACE, "name": soul.name(),
+                    "side": cane.setting("notch_side", "center")}
+    if tool == "events":
+        return events(int(args.get("after", 0)), float(args.get("wait", 20)))
+    if tool == "ask":
+        text = str(args.get("text", "")).strip()[:2000]
+        if text:
+            threading.Thread(target=cane.run, args=(text, Remote(bar)),
+                             daemon=True).start()
+        return {"ok": bool(text)}
+    if tool == "mic":
+        import voice
+        r = Remote(bar)
+        voice.push_to_talk(r, heard=lambda t: (publish("heard", {"text": t}),
+                                               cane.run(t, r)))
+        return {"ok": True}
+    if tool == "day":
+        return ui_day()
+    if tool == "done":
+        return {"text": mark_done_key(str(args.get("key", "")))}
+    if tool == "settings":
+        bar.show_settings()
+        return {"ok": True}
+    raise ValueError("unknown ui tool %r" % tool)
+
+
+def serve(approve, face=None, ui=None):
+    """Start the endpoint; returns the server. `approve` as in call();
+    `ui` is the Bar, for the Electron front end's calls."""
     token = secrets.token_urlsafe(24)
 
     class H(http.server.BaseHTTPRequestHandler):
@@ -120,6 +251,14 @@ def serve(approve, face=None):
             # The body is read first even when refused: replying with it
             # unread made Windows reset the connection ~1 in 3 times, so a
             # wrong token looked like "Tavinor isn't running".
+            if ui is not None and self.headers.get("X-Tavinor-UI") == UI_TOKEN:
+                try:
+                    req = json.loads(body or b"{}")
+                    out = {"ok": True, "data": ui_call(ui, str(req.get("tool")),
+                                                       req.get("args") or {})}
+                except Exception as e:
+                    out = {"ok": False, "error": str(e)}
+                return self._reply(json.dumps(out).encode())
             if self.headers.get("X-Cane-Token") != token:
                 self.send_response(403)
                 self.end_headers()
@@ -129,7 +268,9 @@ def serve(approve, face=None):
                 ok, text = call(str(req.get("tool")), req.get("args") or {}, approve, face)
             except Exception as e:
                 ok, text = False, "bad request: %s" % e
-            body = json.dumps({"ok": ok, "text": text}).encode()
+            self._reply(json.dumps({"ok": ok, "text": text}).encode())
+
+        def _reply(self, body):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

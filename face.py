@@ -20,6 +20,8 @@ CX, CY = 30, 42          # centre, where the chevron sat
 STATES = ("idle", "listening", "thinking", "done", "error", "focus", "eyes")
 SETTLE_MS = 1600         # done / error go back to resting after this
 ORANGE = "#ff8a3d"
+# Called with each new state (not blinks): the Electron UI draws the same face.
+LISTENERS = []
 
 
 def resting():
@@ -49,6 +51,9 @@ class Face:
     def draw(self, state, blink=False):
         cv = self.cv
         cv.delete("face")
+        if not blink:
+            for f in LISTENERS:
+                f(state)
         self.state = state
         if not self.enabled():
             cv.create_text(CX, CY, text="›", fill=cane.ACCENT, tags="face",

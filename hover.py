@@ -4,7 +4,7 @@ down - no hotkey. Move away without typing and it tucks itself back.
 What stops it opening by accident:
   - full-screen windows (video, games, F11) never trigger it
   - a held mouse button never triggers it: dragging a window to the top
-    edge is Windows' snap-to-maximise, not a request for Cane
+    edge is Windows' snap-to-maximise, not a request for Tavinor
   - the cursor has to rest in the zone briefly, longer over a browser,
     whose tab strip sits right at the top edge
   - the right-most strip is left alone, where maximised windows keep their

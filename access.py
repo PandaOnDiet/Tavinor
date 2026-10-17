@@ -48,7 +48,7 @@ RISKY_WORDS = (r"send|delete|remove|erase|pay|buy|purchase|order|checkout|"
 TYPE_DELAY = 0.008       # seconds between typed characters
 
 stop = threading.Event()  # set by the panic key
-_last_other = [None]      # last foreground window that wasn't Cane's own
+_last_other = [None]      # last foreground window that wasn't Tavinor's own
 _LOCK = threading.Lock()
 DB = cane.Path(cane.__file__).with_name("cane.db")
 
@@ -104,7 +104,7 @@ def _is_cane(hwnd):
 
 
 def track():
-    """Remember the last window in front that isn't Cane's: while you chat,
+    """Remember the last window in front that isn't Tavinor's: while you chat,
     the chat has focus, and "read my screen" means the window behind it."""
     while True:
         try:
@@ -556,7 +556,7 @@ def _do(act, arg, approved):
         if out.startswith("NOPATTERN:"):
             return "found %r but it can't be clicked that way" % out[10:]
         return "nothing called %r in that window" % arg
-    # type / keys go to the target window, never to Cane's own chat.
+    # type / keys go to the target window, never to Tavinor's own chat.
     if winsys.u32.GetForegroundWindow() != h and not bring(h):
         return "couldn't bring the window forward, so nothing was typed"
     if act == "keys":
@@ -570,7 +570,7 @@ def _do(act, arg, approved):
 
 
 def indicator(ui, what):
-    """A pill at the top of the screen while Cane is reading or acting.
+    """A pill at the top of the screen while Tavinor is reading or acting.
     Returns a function that removes it (after at least 0.8 s, to be seen)."""
     if not ui:
         return lambda: None
@@ -582,7 +582,7 @@ def indicator(ui, what):
         w.overrideredirect(True)
         w.attributes("-topmost", True)
         w.configure(bg="#ff8a3d")
-        tk.Label(w, text="●  Cane is %s your screen  ·  Ctrl+Alt+Esc stops it"
+        tk.Label(w, text="●  Tavinor is %s your screen  ·  Ctrl+Alt+Esc stops it"
                  % ("reading" if what == "reading" else "using"),
                  bg="#ff8a3d", fg="#111", font=("Segoe UI", 9, "bold"),
                  padx=12, pady=3).pack()

@@ -1,12 +1,12 @@
-"""Cane as an MCP server (phase 12), for Claude Code, Codex or any agent.
+"""Tavinor as an MCP server (phase 12), for Claude Code, Codex or any agent.
 
-    claude mcp add cane -- python "D:\\VS Code\\Cane\\mcp_server.py"
+    claude mcp add tavinor -- python "D:\\VS Code\\Cane\\mcp_server.py"
 
 Speaks MCP over stdio (newline-delimited JSON-RPC 2.0) and forwards every
-tool call to the running Cane through bridge.py, so changes appear as a
-Do it / Cancel card in Cane and wait for you. If Cane isn't running, tools
+tool call to the running Tavinor through bridge.py, so changes appear as a
+Do it / Cancel card in Tavinor and wait for you. If Tavinor isn't running, tools
 say so instead of acting. Standard library only; it never imports cane.py,
-so starting it can't start a second Cane.
+so starting it can't start a second Tavinor.
 """
 import json
 import os
@@ -17,11 +17,11 @@ from pathlib import Path
 
 BRIDGE = Path(os.environ.get("CANE_BRIDGE") or Path(__file__).with_name("bridge.json"))
 VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
-WAIT = 150                  # a write waits for your click in Cane
+WAIT = 150                  # a write waits for your click in Tavinor
 
 TOOLS = [
     {"name": "get_day",
-     "description": "The user's day from Cane: open tasks (numbered), focus "
+     "description": "The user's day from Tavinor: open tasks (numbered), focus "
                     "session, habits done today, and today's calendar.",
      "inputSchema": {"type": "object", "properties": {}}},
     {"name": "search_notes",
@@ -30,24 +30,24 @@ TOOLS = [
                      "properties": {"query": {"type": "string"}}}},
     {"name": "add_task",
      "description": "Add a task to the user's list. The user approves it in "
-                    "Cane first.",
+                    "Tavinor first.",
      "inputSchema": {"type": "object", "required": ["text"],
                      "properties": {"text": {"type": "string"},
                                     "due": {"type": "string", "description":
                                             "optional, e.g. 'friday at 5pm'"}}}},
     {"name": "add_note",
-     "description": "Save a note. The user approves it in Cane first.",
+     "description": "Save a note. The user approves it in Tavinor first.",
      "inputSchema": {"type": "object", "required": ["text"],
                      "properties": {"text": {"type": "string"}}}},
     {"name": "start_focus",
      "description": "Start a focus session (closes distracting sites until it "
-                    "ends). The user approves it in Cane first.",
+                    "ends). The user approves it in Tavinor first.",
      "inputSchema": {"type": "object",
                      "properties": {"task": {"type": "string"},
                                     "minutes": {"type": "integer", "minimum": 1,
                                                 "maximum": 480}}}},
     {"name": "animate_face",
-     "description": "Change the face on Cane's bar for a moment.",
+     "description": "Change the face on Tavinor's bar for a moment.",
      "inputSchema": {"type": "object", "required": ["state"],
                      "properties": {"state": {"type": "string", "enum": [
                          "idle", "listening", "thinking", "done", "error",
@@ -56,11 +56,11 @@ TOOLS = [
 
 
 def forward(tool, args):
-    """(ok, text) from the running Cane."""
+    """(ok, text) from the running Tavinor."""
     try:
         info = json.loads(BRIDGE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return False, "Cane isn't running (no bridge.json) - start Cane first"
+        return False, "Tavinor isn't running (no bridge.json) - start Tavinor first"
     req = urllib.request.Request(
         "http://127.0.0.1:%d/" % info["port"],
         json.dumps({"tool": tool, "args": args}).encode(),
@@ -70,9 +70,9 @@ def forward(tool, args):
             out = json.load(r)
         return bool(out.get("ok")), str(out.get("text", ""))
     except urllib.error.HTTPError as e:
-        return False, "Cane refused the call (%d)" % e.code
+        return False, "Tavinor refused the call (%d)" % e.code
     except (urllib.error.URLError, OSError):
-        return False, "Cane isn't running - start Cane first"
+        return False, "Tavinor isn't running - start Tavinor first"
 
 
 def handle(msg):
@@ -84,7 +84,7 @@ def handle(msg):
         want = (msg.get("params") or {}).get("protocolVersion")
         result = {"protocolVersion": want if want in VERSIONS else VERSIONS[0],
                   "capabilities": {"tools": {}},
-                  "serverInfo": {"name": "cane", "version": "1.0"}}
+                  "serverInfo": {"name": "tavinor", "version": "1.0"}}
     elif method == "ping":
         result = {}
     elif method == "tools/list":

@@ -859,7 +859,7 @@ def check_soul():
     soul.SOUL = pathlib.Path(tempfile.mkdtemp()) / "soul.md"
     cane.SETTINGS = pathlib.Path(tempfile.mkdtemp()) / "s.json"
     n = 0
-    assert soul.name() == "Cane" and soul.load()["memory"] == []
+    assert soul.name() == "Tavinor" and soul.load()["memory"] == []
     soul.ensure()
     assert soul.SOUL.exists()
     n += 2
@@ -882,8 +882,8 @@ def check_soul():
 
     # Hand-edited oddities: plain prose, a missing name, a blank file.
     assert soul.parse("Just be nice.")["personality"] == "Just be nice."
-    assert soul.parse("## Identity\nCalm.\n")["name"] == "Cane"
-    assert soul.parse("")["name"] == "Cane"
+    assert soul.parse("## Identity\nCalm.\n")["name"] == "Tavinor"
+    assert soul.parse("")["name"] == "Tavinor"
     n += 3
 
     # Off switch: nothing of the soul goes to the provider.
@@ -1377,6 +1377,15 @@ def check_voice_face():
         n += 1
     assert voice.parse_wake("Hey Wren, lock it", "wren") == (True, "lock it")
     n += 1
+    # Phase 13: the new name, including Whisper splitting it into words.
+    for text, want in [("Hey Tavinor, open Chrome.", (True, "open chrome")),
+                       ("Hey Tavi nor, open notes", (True, "open notes")),
+                       ("Hey Tav in or", (True, "")),
+                       ("Hey tavern down the road", (False, "")),
+                       ("Hey there, how are you", (False, "")),
+                       ("Hey Tom", (False, ""))]:
+        assert voice.parse_wake(text, "tavinor") == want, (text, voice.parse_wake(text, "tavinor"))
+        n += 1
 
     # What gets said aloud: no code, no fallback note.
     said = voice.clean_for_speech("(could not reach NVIDIA - answered by x)\nRun "
@@ -1682,9 +1691,9 @@ def check_mcp():
     bridge.run = lambda tool, args: ran.append(tool) or "ok"
     try:
         assert bridge.call("add_task", {"text": "x"}, lambda l: False) == (
-            False, "declined by the user in Cane") and ran == []
+            False, "declined by the user in Tavinor") and ran == []
         ok, text = bridge.call("add_task", {"text": "x"}, lambda l: True)
-        assert ok and text.startswith("approved by the user in Cane") and ran == ["add_task"]
+        assert ok and text.startswith("approved by the user in Tavinor") and ran == ["add_task"]
         assert bridge.call("get_day", {}, lambda l: False) == (True, "ok")
         faces = []
         assert bridge.call("animate_face", {"state": "done"}, lambda l: False,

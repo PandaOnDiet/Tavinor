@@ -30,7 +30,7 @@ NAMES = {"code": "VS Code", "chrome": "Chrome", "msedge": "Edge", "brave": "Brav
          "excel": "Excel", "powerpnt": "PowerPoint", "outlook": "Outlook",
          "olk": "Outlook", "teams": "Teams", "ms-teams": "Teams",
          "whatsapp": "WhatsApp", "windowsterminal": "Terminal", "slack": "Slack",
-         "spotify": "Spotify", "notepad": "Notepad", "pythonw": "Cane"}
+         "spotify": "Spotify", "notepad": "Notepad", "pythonw": "Tavinor"}
 SKIP = {"lockapp.exe", "logonui.exe", ""}      # lock screen, sign-in
 
 _LOCK = threading.Lock()

@@ -1,5 +1,5 @@
 """The face on the bar (phase 11): a small animated face where the ›
-chevron was, so you can tell at a glance what Cane is doing.
+chevron was, so you can tell at a glance what Tavinor is doing.
 
   idle       open eyes, small smile, blinks now and then
   listening  wide eyes, an open mouth - the mic is on

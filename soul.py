@@ -18,7 +18,7 @@ import cane
 
 SOUL = Path(__file__).with_name("soul.md")
 SECTIONS = ("Identity", "About you", "Rules", "Memory")
-DEFAULT_NAME = "Cane"
+DEFAULT_NAME = "Tavinor"
 
 PRESETS = {
     "Concise": "Direct and brief. Answer first, no filler, no small talk.",

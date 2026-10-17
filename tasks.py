@@ -1,6 +1,6 @@
 """Tasks, workspaces and habits (Taby parity, phase 5).
 
-Tasks are Cane's existing open items in notes.json, with optional extras:
+Tasks are Tavinor's existing open items in notes.json, with optional extras:
 a due date (which also fires as a reminder, as before), subtasks, and a
 workspace - the apps and links "start task X" opens. Old rows need no
 migration; they simply have none of the extras.

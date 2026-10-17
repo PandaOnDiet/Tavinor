@@ -1,4 +1,4 @@
-"""Cane - text-first command router with a memory.
+"""Tavinor - text-first command router with a memory.
 
 Hotkey (Ctrl+Alt+Space) -> input bar -> the sentence is matched in three
 tiers, cheapest first:
@@ -7,8 +7,8 @@ tiers, cheapest first:
   2. loose phrasing (skip this one, remind me at 5) - tiny local model
   3. questions - a cloud model answers into a panel; Copilot one click away
 
-Tasks go to Cane's own chat (agent.py), done by the answer provider through
-Cane's own commands; Claude Code is only ever an explicit button there. Also
+Tasks go to Tavinor's own chat (agent.py), done by the answer provider through
+Tavinor's own commands; Claude Code is only ever an explicit button there. Also
 keeps open items and reminders in notes.json, a personality in soul.md
 (soul.py), focus sessions and blocks in focus.json (focus.py), and opens
 when the cursor touches the top edge (hover.py).
@@ -120,10 +120,10 @@ google      search the web. arg = the search terms
 weather     rain, temperature or the forecast. arg = the place, or "" for
             here. Other questions about places or space are "ask"
 clock       the current time or date
-settings    open Cane's own settings
+settings    open Tavinor's own settings
 files       organise, sort, tidy or move the user's files or folders.
             arg = the request as written
-undo        put back the files Cane last moved. A question about undoing
+undo        put back the files Tavinor last moved. A question about undoing
             anything else (git, Word, a setting) is "ask"
 search_play play a NAMED song. arg = song name only
 launch      open an app. arg = app name only
@@ -735,7 +735,7 @@ def _quick(text):
     if re.match(r"(remind|remember|note|don't forget|dont forget)\b", t):
         return None
 
-    # Cane's own settings. "open settings" alone still means Windows Settings,
+    # Tavinor's own settings. "open settings" alone still means Windows Settings,
     # like every other "open X".
     if re.fullmatch(r"(?:(?:open|show) )?cane(?:'s)? (?:settings|preferences|"
                     r"options)|settings|preferences|options|show settings", t):
@@ -1027,7 +1027,7 @@ def key_set(provider, key):
         return
     blob = key.encode("utf-16-le")
     buf = ctypes.create_string_buffer(blob, len(blob))   # alive until written
-    c = CREDENTIAL(Type=CRED_GENERIC, TargetName=target, UserName="Cane",
+    c = CREDENTIAL(Type=CRED_GENERIC, TargetName=target, UserName="Tavinor",
                    Persist=CRED_PERSIST_LOCAL, CredentialBlobSize=len(blob),
                    CredentialBlob=ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
     if not _adv.CredWriteW(ctypes.byref(c), 0):
@@ -1228,7 +1228,7 @@ def answer(question, history=None, timeout=45):
 
 # The planner may only MOVE files into folders. No delete, no rename, no
 # overwrite, no shell: it returns groups of file names and a destination,
-# and Cane checks every one before you see it. A file named "delete
+# and Tavinor checks every one before you see it. A file named "delete
 # everything.pdf" is just a name - there is no command for it to become.
 
 # Windows known-folder IDs. Desktop and Documents are often redirected into
@@ -1577,8 +1577,8 @@ def dispatch(intent, ui=None):
             soul.open_window(ui)
         return "personality"
 
-    # Tasks are done in Cane's own chat, by the answer provider, through
-    # Cane's own commands. Nothing is handed to an external CLI here; Claude
+    # Tasks are done in Tavinor's own chat, by the answer provider, through
+    # Tavinor's own commands. Nothing is handed to an external CLI here; Claude
     # Code is a button in the chat that only you can press.
     if kind in ("chat", "escalate"):
         if not ui:
@@ -1772,7 +1772,7 @@ HIDE_AFTER = {"launch", "google", "search_play", "copilot", "escalate",
 
 SAYS = {"weather": "show the weather", "clock": "show the time",
         "lock": "lock the screen", "screenshot": "take a screenshot",
-        "settings": "open Cane's settings", "recall": "show what's open",
+        "settings": "open Tavinor's settings", "recall": "show what's open",
         "remember": "save a note", "done": "mark it done",
         "escalate": "do it in the chat", "chat": "open the chat",
         "soul": "open the personality settings",
@@ -1786,7 +1786,7 @@ MEDIA_SAYS = {"pause": "pause", "play": "play", "next": "next track",
 
 
 def describe(it):
-    """One line saying what Cane would do with this intent."""
+    """One line saying what Tavinor would do with this intent."""
     kind, arg, act = it["intent"], it.get("arg") or "", it.get("action") or ""
     if kind == "launch":
         hit = resolve(arg)
@@ -1865,9 +1865,9 @@ def suggest(text, limit=5):
             if all(row[0] != r[0] for r in rows):
                 rows.append(row)
     if not hit and len(t) > 2:
-        # First fallback is Cane's normal routing (intent None = parse it on
+        # First fallback is Tavinor's normal routing (intent None = parse it on
         # Enter), not "ask": that sent "play next" to the cloud as a question.
-        rows.append(("run “%s”" % t[:34], "Cane decides", None))
+        rows.append(("run “%s”" % t[:34], "Tavinor decides", None))
         rows.append(("ask " + current_model(),
                      "", {"intent": "ask", "arg": t}))
         rows.append(("search the web for “%s”" % t[:30], "",
@@ -2578,7 +2578,7 @@ class Bar:
             cv.itemconfig(test_note, text="asking…", fill=DIM)
 
             def go():
-                # Two checks: it answers, and it can drive Cane's tools - a
+                # Two checks: it answers, and it can drive Tavinor's tools - a
                 # model that can't produce the chat's JSON can't do tasks.
                 t0 = time.time()
                 try:
@@ -2622,13 +2622,13 @@ class Bar:
                 self._settings_win = None
 
         general = [
-            ("Start with Windows", "Cane opens in the tray when you log in",
-             (STARTUP / "Cane.vbs").exists(),
+            ("Start with Windows", "Tavinor opens in the tray when you log in",
+             (STARTUP / "Tavinor.vbs").exists() or (STARTUP / OLD_VBS).exists(),
              lambda on: install_startup() if on else remove_startup()),
             # Not "nothing leaves the laptop": off hands the question to
-            # Copilot, which is Microsoft's cloud. Cane itself sends nothing.
+            # Copilot, which is Microsoft's cloud. Tavinor itself sends nothing.
             ("Cloud answers", "Questions go to the provider below. Off: "
-             "Cane opens Copilot instead",
+             "Tavinor opens Copilot instead",
              setting("cloud_answers", True),
              lambda on: set_setting("cloud_answers", on)),
             ("Hover to open", "Touch the top edge above the bar to open it. "
@@ -2643,7 +2643,7 @@ class Bar:
              "focus. Off: the plain arrow",
              setting("face", True),
              lambda on: (set_setting("face", on), self.face.draw(face.resting()))),
-            # Tasks are always done in Cane's chat. This only adds a button
+            # Tasks are always done in Tavinor's chat. This only adds a button
             # there - nothing is ever handed to Claude Code automatically.
             ("Claude Code button in chat", "Adds \"Hand to Claude Code\" to the "
              "chat. Nothing goes to it unless you press it",
@@ -2822,7 +2822,7 @@ class Bar:
                          setting("meeting_reminders", True),
                          lambda on: set_setting("meeting_reminders", on))
         cv.create_text(24, 296, anchor="nw", fill=DIM, font=FONT_SM,
-                       width=self.W - 48, text='1. Open console.cloud.google.com and create a project (any name).\n2. APIs & Services > Library: enable Google Calendar API.\n3. OAuth consent screen: External, app name Cane, your email; under\n   Test users add your own Google address.\n4. Credentials > Create credentials > OAuth client ID > Desktop app.\n5. Copy the Client ID and Client secret into this page, press Save,\n   then Sign in with Google.\nCane asks only for calendar events. The sign-in token is kept in\nWindows Credential Manager, never in a file.')
+                       width=self.W - 48, text='1. Open console.cloud.google.com and create a project (any name).\n2. APIs & Services > Library: enable Google Calendar API.\n3. OAuth consent screen: External, app name Tavinor, your email; under\n   Test users add your own Google address.\n4. Credentials > Create credentials > OAuth client ID > Desktop app.\n5. Copy the Client ID and Client secret into this page, press Save,\n   then Sign in with Google.\nCane asks only for calendar events. The sign-in token is kept in\nWindows Credential Manager, never in a file.')
 
     def _notes_page(self, back=None):
         H = 300
@@ -3125,13 +3125,13 @@ def tray_loop(bar):
                 bar.root.after(0, bar.show)
             else:
                 menu = u32.CreatePopupMenu()
-                u32.AppendMenuW(menu, 0, ID_OPEN, "Open Cane\tCtrl+Alt+Space")
+                u32.AppendMenuW(menu, 0, ID_OPEN, "Open Tavinor\tCtrl+Alt+Space")
                 u32.AppendMenuW(menu, 0, ID_CHAT, "Chat")
                 u32.AppendMenuW(menu, 0, ID_ITEMS, "Open items")
                 u32.AppendMenuW(menu, 0, ID_SOUL, "Personality…")
                 u32.AppendMenuW(menu, 0, ID_SETTINGS, "Settings…")
                 u32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
-                u32.AppendMenuW(menu, 0, ID_QUIT, "Quit Cane")
+                u32.AppendMenuW(menu, 0, ID_QUIT, "Quit Tavinor")
                 pt = wintypes.POINT()
                 u32.GetCursorPos(ctypes.byref(pt))
                 u32.SetForegroundWindow(hwnd)   # else the menu never dismisses
@@ -3163,7 +3163,7 @@ def tray_loop(bar):
     cls.lpszClassName = "CaneTray"
     if not u32.RegisterClassW(ctypes.byref(cls)):
         return
-    hwnd = u32.CreateWindowExW(0, "CaneTray", "Cane", 0, 0, 0, 0, 0,
+    hwnd = u32.CreateWindowExW(0, "CaneTray", "Tavinor", 0, 0, 0, 0, 0,
                                None, None, cls.hInstance, None)
     if not hwnd:
         return
@@ -3175,7 +3175,7 @@ def tray_loop(bar):
     nid.uFlags = NIF_ALL
     nid.uCallbackMessage = WM_TRAY
     nid.hIcon = _tray_icon(u32)
-    nid.szTip = "Cane - Ctrl+Alt+Space"
+    nid.szTip = "Tavinor - Ctrl+Alt+Space"
     ctypes.windll.shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid))
 
     if not u32.RegisterHotKey(hwnd, 1, 0x0002 | 0x0001, 0x20):  # CTRL|ALT SPACE
@@ -3203,21 +3203,26 @@ STARTUP = Path(os.path.expandvars(
     r"%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"))
 
 
+OLD_VBS = "Cane.vbs"       # the launcher's name before the rename
+
+
 def install_startup():
     """Drop a launcher in the Startup folder. Runs windowless via pythonw."""
     pyw = Path(sys.executable).with_name("pythonw.exe")
     if not pyw.exists():
         pyw = Path(sys.executable)
-    target = STARTUP / "Cane.vbs"
+    target = STARTUP / "Tavinor.vbs"
+    (STARTUP / OLD_VBS).unlink(missing_ok=True)      # renamed in phase 13
     target.write_text(
-        "' Starts Cane at login with no console window. Delete to disable.\r\n"
+        "' Starts Tavinor at login with no console window. Delete to disable.\r\n"
         'CreateObject("WScript.Shell").Run """%s"" ""%s""", 0, False\r\n'
         % (pyw, Path(__file__).resolve()), encoding="utf-8")
     return target
 
 
 def remove_startup():
-    target = STARTUP / "Cane.vbs"
+    (STARTUP / OLD_VBS).unlink(missing_ok=True)
+    target = STARTUP / "Tavinor.vbs"
     if target.exists():
         target.unlink()
         return target
@@ -3258,6 +3263,8 @@ if __name__ == "__main__":
     access.on_start()
     threading.Thread(target=voice.Wake(bar).loop, daemon=True).start()
     threading.Thread(target=gcal.reminders, args=(bar,), daemon=True).start()
+    if (STARTUP / OLD_VBS).exists():
+        install_startup()                    # Cane.vbs -> Tavinor.vbs, once
     bridge.serve(bridge.approver(bar), face=bar.set_face)   # for mcp_server.py
     soul.ensure()
     # Start hidden: it lives in the tray, and at login nothing should appear.

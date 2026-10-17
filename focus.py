@@ -152,7 +152,7 @@ def tick(now=None):
 
 
 def recover(now=None):
-    """At startup: a session that ended while Cane wasn't running can't be
+    """At startup: a session that ended while Tavinor wasn't running can't be
     called finished - nobody saw it through - so it is "abandoned"."""
     now = now or datetime.now()
     with _LOCK:

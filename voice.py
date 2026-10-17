@@ -1,4 +1,4 @@
-"""Voice (phase 8): talk to Cane, have it talk back, and an opt-in
+"""Voice (phase 8): talk to Tavinor, have it talk back, and an opt-in
 "Hey <name>" wake word.
 
 Built on Windows' own speech engine (System.Speech, en-US) driven through
@@ -245,11 +245,12 @@ def push_to_talk(bar):
 # Real words a misheard name must not be: "hey can you..." is not "hey cane".
 COMMON = {"can", "came", "cake", "case", "cave", "care", "cain't", "cant",
           "kind", "cone", "come", "keen", "game", "gain", "there", "then",
-          "the", "they", "you", "guys", "man", "what", "how", "why", "so"}
+          "the", "they", "you", "guys", "man", "what", "how", "why", "so",
+          "tavern"}
 
 
 def parse_wake(text, name):
-    """(woke, rest) for a transcript: "Hey Cane, open Chrome." -> (True,
+    """(woke, rest) for a transcript: "Hey Tavinor, open Chrome." -> (True,
     "open chrome"). The greeting must come first and the name second, said
     as the name or something close to it - never a common word."""
     import difflib
@@ -257,14 +258,17 @@ def parse_wake(text, name):
     name = name.lower()
     if len(words) < 2 or words[0] not in ("hey", "hi", "okay", "ok"):
         return False, ""
-    w = words[1]
     # Same length give or take one letter: Kane and Cain are the name,
-    # "okay cancel that" is not (it woke Cane in testing).
-    close = w == name or (w not in COMMON and abs(len(w) - len(name)) <= 1 and
-                          difflib.SequenceMatcher(None, w, name).ratio() >= 0.75)
-    if not close:
-        return False, ""
-    return True, " ".join(words[2:])
+    # "okay cancel that" is not (it woke it in testing). Longer names can
+    # arrive split ("tavi nor"), so 1 to 3 words are tried joined.
+    for k in (1, 2, 3):
+        w = "".join(words[1:1 + k])
+        if k > 1 and len(words) < 1 + k:
+            break
+        if w == name or (w not in COMMON and abs(len(w) - len(name)) <= 1 and
+                         difflib.SequenceMatcher(None, w, name).ratio() >= 0.75):
+            return True, " ".join(words[1 + k:])
+    return False, ""
 
 
 def handle(line, name):

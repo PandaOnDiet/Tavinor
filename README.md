@@ -1,4 +1,4 @@
-# Cane
+# Tavinor
 
 Text-first command router with a memory. Press **Ctrl+Alt+Space**, type what you
 want, press Enter.
@@ -17,7 +17,7 @@ Every sentence goes through three tiers, cheapest first:
 3. **Questions** go to a cloud model, and the answer appears in a panel.
    Copilot is one click away.
 
-**Tasks are done in Cane's own chat**, by your answer provider, through Cane's
+**Tasks are done in Tavinor's own chat**, by your answer provider, through Tavinor's
 own commands (see [Chat](#chat)). Nothing is handed to Claude Code or any other
 CLI on its own. Open items and reminders live in `notes.json` next to this file.
 
@@ -28,7 +28,7 @@ distracting tabs until a session ends. The roadmap is `TABY-PLAN.md`.
 
 ## Run
 
-Cane lives in the system tray. There is no console window and no terminal left
+Tavinor lives in the system tray. There is no console window and no terminal left
 open — it runs under `pythonw.exe`.
 
     python cane.py --install-startup   # start at login (do this once)
@@ -37,7 +37,7 @@ open — it runs under `pythonw.exe`.
     pythonw cane.py                    # start it now, windowless
     python  cane.py --show             # start it and open the bar immediately
 
-Startup writes a single file to `shell:startup` (`Cane.vbs`). Deleting that file
+Startup writes a single file to `shell:startup` (`Tavinor.vbs`). Deleting that file
 disables autostart; nothing else is touched, no registry, no scheduled task.
 
 ### The bar
@@ -73,8 +73,8 @@ the bar clears it.
 | Action | Result |
 |---|---|
 | Left click | Opens the bar |
-| Right click | Menu: Open Cane / Open items / Settings… / Quit Cane |
-| Quit Cane | Removes the icon and exits the process |
+| Right click | Menu: Open Tavinor / Open items / Settings… / Quit Tavinor |
+| Quit Tavinor | Removes the icon and exits the process |
 
 ### Settings
 
@@ -85,8 +85,8 @@ immediately, with no Save button. Close with ✕ or Escape.
 
 | Switch | Default | What it does |
 |---|---|---|
-| Start with Windows | on | Adds/removes `Cane.vbs` in `shell:startup`. Reads the real file, not a saved flag |
-| Cloud answers | on | On: questions go to the answer provider and the answer appears in Cane. Off: Cane sends nothing and opens Copilot with the question copied |
+| Start with Windows | on | Adds/removes `Tavinor.vbs` in `shell:startup`. Reads the real file, not a saved flag |
+| Cloud answers | on | On: questions go to the answer provider and the answer appears in Tavinor. Off: Tavinor sends nothing and opens Copilot with the question copied |
 | Hover to open | on | Touch the top edge above the bar to open it (see [Hover to open](#hover-to-open)) |
 | Claude Code button in chat | **off** | Adds *Hand to Claude Code* to the chat. Nothing goes to it unless you press it |
 | Answers → Provider | Ollama | Ollama, Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter, NVIDIA |
@@ -103,7 +103,7 @@ didn't expect.
 
 `brigtness 50`, `volum 30`, `timr 5 min`, `wether`, `settigns`, `pasue` all
 work. If the exact wording matches nothing, near-miss words are snapped onto
-Cane's command words (`VOCAB`), and the fixed-shape patterns are tried again.
+Tavinor's command words (`VOCAB`), and the fixed-shape patterns are tried again.
 The correction is **only accepted if the corrected sentence fully matches a
 pattern**. Otherwise the model gets your original words. App names get the same
 treatment: a close typo opens the app, a distant one gets
@@ -124,7 +124,7 @@ generated, not committed art:
 artwork with 4x supersampling for antialiasing — no Pillow, stdlib only. Seven
 sizes are packed in (16 through 256) so Windows picks a crisp one everywhere.
 Edit `PANEL`, `ACCENT`, or the chevron points at the top of `render()` and re-run
-to change it. Delete `cane.ico` and Cane falls back to the stock Windows icon.
+to change it. Delete `cane.ico` and Tavinor falls back to the stock Windows icon.
 
 ## What it handles
 
@@ -149,12 +149,12 @@ to change it. Delete `cane.ico` and Cane falls back to the stock Windows icon.
 | `remind me in 20 minutes to check the build` | Saves it with a time; pops up when due |
 | `what's left` / `what am I tracking` | Lists open items, numbered |
 | `mark 2 done` / `done ravi` | Closes an item by number or by words |
-| a task (`write me a script`, `set a timer and remind me after`) | Cane's own [chat](#chat), done by your answer provider |
+| a task (`write me a script`, `set a timer and remind me after`) | Tavinor's own [chat](#chat), done by your answer provider |
 
 ### File tasks: plan, approve, undo
 
 `clean up my downloads`, `move my invoices into paisa`, `sort my desktop` —
-Cane shows a plan and **nothing moves until you press Do it**:
+Tavinor shows a plan and **nothing moves until you press Do it**:
 
     PLAN   clean up my downloads
     8 files in Downloads
@@ -204,7 +204,7 @@ the panel's first line says why. Weather asks wttr.in with your IP or the place
 you name. Nothing else goes out.
 
 The Anthropic provider uses Anthropic's official SDK (`pip install anthropic`),
-the only package Cane depends on, and only for that provider. Without it the
+the only package Tavinor depends on, and only for that provider. Without it the
 other six still work. Claude Opus 5 requests carry `fallbacks: "default"`: if
 Claude's safety classifiers decline a question, Anthropic reruns it on a
 fallback model server-side rather than returning nothing. Answers use `effort:
@@ -215,15 +215,15 @@ low`, because they are four-sentence answers in a bar.
 Neither the Copilot app (`ms-copilot:`) nor copilot.microsoft.com accepts a
 question in the link. Both were tested and both opened with an empty box.
 Typing it in for you would mean sending keystrokes into whichever window has
-focus. If Copilot were slow to start, that could be a terminal. So Cane copies
+focus. If Copilot were slow to start, that could be a terminal. So Tavinor copies
 the question to the clipboard and opens Copilot, and you paste it.
 
 ## Chat
 
 `chat`, the tray's **Chat**, or any request the router reads as a task opens
-Cane's chat window. Your answer provider does the work there through Cane's
+Tavinor's chat window. Your answer provider does the work there through Tavinor's
 own commands - apps, volume, timers, reminders, focus, file moves - in rounds:
-it proposes actions, Cane runs them, the results go back, up to 4 rounds per
+it proposes actions, Tavinor runs them, the results go back, up to 4 rounds per
 message. History is kept in `chat.json` until you press Clear.
 
 - Every provider works, including ones without tool calling: the model replies
@@ -285,7 +285,7 @@ browser, must still be in front, and its title must still name the site at
 the moment Ctrl+W is sent; then there is a 3 s cooldown so a closing tab's
 lingering title can't get the *next* tab closed. Sites are matched on whole
 title parts: "Lofi - YouTube" is YouTube, "Song - YouTube Music" and "Notes
-about YouTube - Google Docs" are not. A session that ends while Cane isn't
+about YouTube - Google Docs" are not. A session that ends while Tavinor isn't
 running is recorded as abandoned. State lives in `focus.json`.
 
 ## Tasks and habits
@@ -388,7 +388,7 @@ Settings > Face on the bar turns it back into the arrow.
 
 `note: the wifi password is on the fridge`, `find note about the internet
 login`, `notes`, `delete note 3`. Found by meaning: your provider's
-embedding model first (Cane uses the first listed one that actually answers
+embedding model first (Tavinor uses the first listed one that actually answers
 - on this NVIDIA key 5 of 7 listed return 404), then Ollama's
 `nomic-embed-text`, then plain words, and each fallback says so. Settings >
 Notes > Only on this laptop skips the provider. On six notes searched with
@@ -401,7 +401,7 @@ still saves an open item, as before.
 
 Settings > Calendar has the five setup steps: you create a free OAuth
 client in Google Cloud Console, paste its ID and secret, and press Sign in
-with Google. Cane asks for calendar events only; the sign-in token is kept
+with Google. Tavinor asks for calendar events only; the sign-in token is kept
 in Windows Credential Manager.
 
 `what's on my calendar tomorrow`, `add meeting design review tomorrow at
@@ -418,20 +418,20 @@ days: never overlapping a meeting or another task.
 
 ## Agent hooks (MCP) for Claude Code and others
 
-    claude mcp add cane -- python "D:\VS Code\Cane\mcp_server.py"
+    claude mcp add tavinor -- python "D:\VS Code\Cane\mcp_server.py"
 
 Tools: `get_day`, `search_notes` (read), `add_task`, `add_note`,
-`start_focus` (each shows a Do it / Cancel card in Cane and waits up to 120
+`start_focus` (each shows a Do it / Cancel card in Tavinor and waits up to 120
 s; no answer is no), `animate_face`. The server forwards to the running
-Cane over 127.0.0.1 with a fresh token per start (`bridge.json`); without
-Cane running, tools say so. Verified with the real Claude Code: an approved
-task appeared in Cane, a declined one didn't.
+Tavinor over 127.0.0.1 with a fresh token per start (`bridge.json`); without
+Tavinor running, tools say so. Verified with the real Claude Code: an approved
+task appeared in Tavinor, a declined one didn't.
 
 ## Looking at the screen
 
 When reading a window's text isn't enough, the chat can **look**: a
 screenshot of the window in front goes to your provider's vision model
-(Cane picks the first that answers - here `nemotron-3.5-super-vl`, which
+(Tavinor picks the first that answers - here `nemotron-3.5-super-vl`, which
 described a test window exactly in 1.9 s). Settings > Screen access >
 Screenshots to the vision model turns it off.
 
@@ -534,13 +534,13 @@ Answer backends, same question ("undo the last commit but keep my changes"):
 
 Everyday-command probe (24 sentences, real parser and dispatcher, side
 effects mocked): **5 right before this tier existed, 19 now**. Of the other
-five, two apps aren't installed and one folder doesn't exist, and Cane says so.
+five, two apps aren't installed and one folder doesn't exist, and Tavinor says so.
 One is a task that correctly waits for Claude Code. The last is `shut down in 1
 hour`, which isn't built yet.
 
 ## Notes
 
-- **Cane starts ollama itself** if it is not running, and preloads the model at
+- **Tavinor starts ollama itself** if it is not running, and preloads the model at
   launch so the first thing you type is fast. If the server genuinely cannot be
   started, commands report `model offline` — they no longer fall back to
   escalation. Escalating on a dead dependency turned every keystroke into a new
@@ -558,7 +558,7 @@ hour`, which isn't built yet.
   that costs no inference. After 8h idle the model was unloaded and the first
   command took 19s. Loading while you type hides most of that.
 - Apps come from `Get-StartApps`, read once at launch (~1–5s, in the
-  background). PATH, which Cane used before, held a handful of command-line
+  background). PATH, which Tavinor used before, held a handful of command-line
   tools. WhatsApp, Settings and Brave were installed but couldn't be opened.
 - Volume goes through the endpoint-volume COM interface via ctypes. Media keys
   only step 2% and can't set a level.

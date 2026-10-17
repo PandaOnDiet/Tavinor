@@ -120,7 +120,7 @@ def sign_in(timeout=180, open_browser=webbrowser.open):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(("<p style='font-family:Segoe UI'>%s You can close "
-                              "this tab.</p>" % ("Signed in to Cane." if got["code"]
+                              "this tab.</p>" % ("Signed in to Tavinor." if got["code"]
                                                  else "Sign-in was cancelled.")).encode())
 
         def log_message(self, *a):

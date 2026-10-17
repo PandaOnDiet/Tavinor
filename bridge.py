@@ -3,7 +3,7 @@
 A tiny HTTP endpoint on 127.0.0.1 (random port) that mcp_server.py calls.
 Each start writes bridge.json beside cane.py with the port and a fresh
 random token; requests without that token are refused. Anything that
-changes your data shows a Do it / Cancel card in Cane and waits for you -
+changes your data shows a Do it / Cancel card in Tavinor and waits for you -
 the same rule as the chat. If you don't answer in APPROVE_WAIT seconds,
 the answer is no.
 """
@@ -96,14 +96,14 @@ def call(tool, args, approve, face=None):
     if tool not in READS | WRITES:
         return False, "unknown tool %r" % tool
     if tool in WRITES and not approve(["An agent wants to:", describe(tool, args)]):
-        return False, "declined by the user in Cane"
+        return False, "declined by the user in Tavinor"
     try:
         out = run(tool, args)
     except Exception as e:
         return False, "failed: %s" % e
     # Live, Claude Code couldn't tell an approved-and-saved task from a
     # pending one when only the result came back. Say it.
-    return True, ("approved by the user in Cane and done - " + out) \
+    return True, ("approved by the user in Tavinor and done - " + out) \
         if tool in WRITES else out
 
 
@@ -113,13 +113,19 @@ def serve(approve, face=None):
 
     class H(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
+            try:
+                body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            except (ValueError, OSError):
+                body = b""
+            # The body is read first even when refused: replying with it
+            # unread made Windows reset the connection ~1 in 3 times, so a
+            # wrong token looked like "Tavinor isn't running".
             if self.headers.get("X-Cane-Token") != token:
                 self.send_response(403)
                 self.end_headers()
                 return
             try:
-                n = int(self.headers.get("Content-Length", 0))
-                req = json.loads(self.rfile.read(n) or b"{}")
+                req = json.loads(body or b"{}")
                 ok, text = call(str(req.get("tool")), req.get("args") or {}, approve, face)
             except Exception as e:
                 ok, text = False, "bad request: %s" % e

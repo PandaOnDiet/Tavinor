@@ -1,8 +1,8 @@
-"""Cane's own chat: tasks are done here, by the configured provider, through
-Cane's own commands. Nothing is handed to an external CLI.
+"""Tavinor's own chat: tasks are done here, by the configured provider, through
+Tavinor's own commands. Nothing is handed to an external CLI.
 
 Every provider speaks this, including ones with no tool-calling support: the
-model replies with one small JSON object, Cane runs the actions through the
+model replies with one small JSON object, Tavinor runs the actions through the
 same dispatch() the bar uses, and feeds the results back. Up to MAX_STEPS
 rounds per message, so "set a timer and remind me after" finishes in one go.
 """
@@ -101,7 +101,7 @@ def soul_name():
         import soul
         return soul.name()
     except ImportError:
-        return "Cane"
+        return "Tavinor"
 
 
 def soul_text():

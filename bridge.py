@@ -211,8 +211,10 @@ def ui_call(bar, tool, args):
     if tool == "hello":
         import soul
         with _EV_COND:
+            import uisettings
             return {"last": _EV_N, "face": _FACE, "name": soul.name(),
-                    "side": cane.setting("notch_side", "center")}
+                    "side": cane.setting("notch_side", "center"),
+                    "config": uisettings.ui_config()}
     if tool == "events":
         return events(int(args.get("after", 0)), float(args.get("wait", 20)))
     if tool == "ask":
@@ -234,6 +236,13 @@ def ui_call(bar, tool, args):
     if tool == "settings":
         bar.show_settings()
         return {"ok": True}
+    if tool == "settings_page":
+        import uisettings
+        return uisettings.page(str(args.get("name", "main")))
+    if tool == "settings_set":
+        import uisettings
+        return uisettings.act(bar, str(args.get("page", "main")), str(args.get("id", "")),
+                              args.get("value"))
     raise ValueError("unknown ui tool %r" % tool)
 
 

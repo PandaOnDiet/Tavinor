@@ -16,6 +16,7 @@ const SLEEP_AFTER = 10 * 60 * 1000;
 let open = false, mode = 'idle', asked = '', interactive = false;
 let closeTimer = null, dwellTimer = null, lastActive = Date.now();
 let shot = null, shotAt = 0;
+let config = { hover: true, hover_slow: false };   // Settings > Hover
 
 // ---------------------------------------------------------------- face
 function setFace(state) {
@@ -106,9 +107,9 @@ document.addEventListener('mousemove', (e) => {
   const over = e.target.closest && e.target.closest(open ? '.head, .pill, .card' : '.zone, .lip');
   setInteractive(!!over);
   if (!open) {
-    if (over && !dwellTimer) {
+    if (over && !dwellTimer && config.hover) {
       grab();                                  // start the picture early
-      dwellTimer = setTimeout(() => { dwellTimer = null; openNow(false); }, 160);
+      dwellTimer = setTimeout(() => { dwellTimer = null; openNow(false); }, config.hover_slow ? 420 : 160);
     } else if (!over && dwellTimer) {
       clearTimeout(dwellTimer); dwellTimer = null;
     }
@@ -210,11 +211,12 @@ mic.addEventListener('click', () => { window.tav.call('mic').catch(() => {}); })
 $('btn-focus').addEventListener('click', () => ask('start focus for 25 minutes'));
 $('btn-plan').addEventListener('click', () => ask('plan my day'));
 $('btn-back').addEventListener('click', showToday);
-$('btn-settings').addEventListener('click', () => { window.tav.call('settings').catch(() => {}); close(); });
+$('btn-settings').addEventListener('click', () => { window.tav.openSettings(); close(); });
 
 // ---------------------------------------------------------------- from Python
 window.tav.on('hello', (h) => {
   setFace(h.face || 'idle');
+  if (h.config) config = h.config;
   q.placeholder = 'Ask ' + (h.name || 'Tavinor') + ', or tell it what to do';
 });
 
@@ -227,5 +229,6 @@ window.tav.on('events', (evs) => {
     else if (e.kind === 'heard') { asked = d.text; showReply(d.text, ''); }
     else if (e.kind === 'open') openNow(true);
     else if (e.kind === 'hide') close();
+    else if (e.kind === 'config') config = d;
   }
 });

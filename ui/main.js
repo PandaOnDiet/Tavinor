@@ -37,8 +37,32 @@ function call(tool, args = {}, timeout = 30000) {
   });
 }
 
-let win;
+let win, sets = null;
 let side = 'center';
+
+// Settings: its own glass window beside the notch, movable by its header.
+async function openSettings() {
+  if (sets && !sets.isDestroyed()) { sets.show(); sets.focus(); return; }
+  const wa = screen.getPrimaryDisplay().workArea;
+  const nb = win.getBounds();
+  const h = Math.min(860, wa.height - 24);
+  const x = Math.min(nb.x + nb.width + 8, wa.x + wa.width - 480);
+  sets = new BrowserWindow({
+    x, y: wa.y + 12, width: 470, height: h, frame: false, transparent: true,
+    resizable: false, skipTaskbar: true, hasShadow: false, show: false,
+    backgroundColor: '#00000000',
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true,
+                      nodeIntegration: false, sandbox: true },
+  });
+  sets.loadFile('settings.html');
+  sets.once('ready-to-show', async () => {
+    const pic = await backdrop(sets).catch(() => null);   // before it shows itself
+    sets.webContents.send('backdrop', pic);
+    sets.show();
+    sets.focus();
+  });
+  sets.on('closed', () => { sets = null; });
+}
 
 function place() {
   const d = screen.getPrimaryDisplay().bounds;
@@ -58,6 +82,7 @@ async function pump(after) {
       misses = 0;
       for (const e of evs) after = Math.max(after, e.id);
       if (evs.length && win && !win.isDestroyed()) win.webContents.send('events', evs);
+      if (evs.length && sets && !sets.isDestroyed()) sets.webContents.send('events', evs);
     } catch (e) {
       if (++misses >= 4) return app.quit();
       await new Promise((r) => setTimeout(r, 750));
@@ -82,7 +107,7 @@ function looking(on) {
 // "Liquid glass": a transparent window cannot blur what is behind it, so the
 // glass blurs a picture of the screen under the notch, taken as it opens.
 // Kept in memory only.
-async function backdrop() {
+async function backdrop(target = win) {
   const d = screen.getPrimaryDisplay();
   const sf = d.scaleFactor;
   const src = await desktopCapturer.getSources({
@@ -91,7 +116,7 @@ async function backdrop() {
   });
   const s = src.find((x) => String(x.display_id) === String(d.id)) || src[0];
   if (!s) return null;
-  const b = win.getBounds();
+  const b = target.getBounds();
   const crop = s.thumbnail.crop({
     x: Math.round((b.x - d.bounds.x) * sf), y: Math.round((b.y - d.bounds.y) * sf),
     width: Math.round(b.width * sf), height: Math.round(b.height * sf),
@@ -129,6 +154,8 @@ app.whenReady().then(async () => {
     if (!on) win.blur();
   });
   ipcMain.on('focus', () => win.focus());
+  ipcMain.on('settings', () => openSettings());
+  ipcMain.on('close-me', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
 
   pump(hello.last || 0);
 });

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'">
+<title>Tavinor settings</title>
+<link rel="stylesheet" href="settings.css">
+</head>
+<body>
+<div class="panel" id="panel">
+  <div class="bd" id="bd"></div>
+  <header class="top">
+    <button class="icon" id="back" type="button" aria-label="Back to settings" hidden>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <h1 id="title">Settings</h1>
+    <button class="icon" id="close" type="button" aria-label="Close settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </header>
+  <main class="body" id="body"></main>
+  <footer class="foot" id="foot"></footer>
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-in">
+      <div class="sheet-top"><span class="eyebrow" id="sheet-title">Action log</span>
+        <button class="icon" id="sheet-close" type="button" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button></div>
+      <pre id="sheet-text"></pre>
+    </div>
+  </div>
+</div>
+<script src="settings.js"></script>
+</body>
+</html>

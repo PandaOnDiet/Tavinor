@@ -1,0 +1,440 @@
+"""Settings for the Electron UI (phase E4, done early).
+
+Each page is described here as plain data - sections of rows (toggle, link,
+radio, select, combo, text, button, list, info) - and the UI draws any page
+from that. Every change goes through act(), which calls the same functions
+the Tk settings window called, so behaviour is unchanged; only the look moved.
+
+Slow actions (Test, Test microphone, Google sign-in) return at once and
+report later with a bridge "note" event: {"page", "id", "text", "ok"}.
+"""
+import threading
+import time
+
+import cane
+
+
+def _note(page, rid, text, ok=True):
+    import bridge
+    bridge.publish("note", {"page": page, "id": rid, "text": text, "ok": ok})
+
+
+def _later(page, rid, fn):
+    """Run fn() off the request thread; its (text, ok) becomes a note."""
+    def go():
+        try:
+            text, ok = fn()
+        except Exception as e:                 # a failed test must still answer
+            text, ok = str(e), False
+        _note(page, rid, text, ok)
+    threading.Thread(target=go, daemon=True).start()
+
+
+def T(rid, label, desc, value):
+    return {"type": "toggle", "id": rid, "label": label, "desc": desc, "value": bool(value)}
+
+
+def L(page, label, desc):
+    return {"type": "link", "id": page, "label": label, "desc": desc}
+
+
+def I(text, dim=True):
+    return {"type": "info", "text": text, "dim": dim}
+
+
+def B(rid, label, confirm=None, note=""):
+    return {"type": "button", "id": rid, "label": label, "confirm": confirm, "note": note}
+
+
+# ------------------------------------------------------------------ pages
+
+def page_main():
+    import access, activity, gcal, notes, soul
+    started = (cane.STARTUP / "Tavinor.vbs").exists() or (cane.STARTUP / cane.OLD_VBS).exists()
+    p = cane.provider()
+    keyed = p != "ollama"
+    k = cane.key_get(p) if keyed else None
+    return {"title": "Settings", "sections": [
+        {"items": [
+            T("startup", "Start with Windows", "Tavinor opens in the tray when you log in", started),
+            T("cloud_answers", "Cloud answers",
+              "Questions go to the provider below. Off: Tavinor opens Copilot instead",
+              cane.setting("cloud_answers", True)),
+            T("hover", "Hover to open", "Touch the top edge above the notch. Never over "
+              "full-screen apps", cane.setting("hover", True)),
+            T("hover_slow", "Hover needs a longer rest",
+              "Fewer accidental opens: waits about twice as long", cane.setting("hover_slow", False)),
+            T("claude", "Claude Code button in chat",
+              "Adds \"Hand to Claude Code\" to the chat. Nothing goes to it unless you press it",
+              cane.setting("claude", False)),
+        ]},
+        {"items": [
+            L("personality", "Personality", soul.name() + " · name, how it talks, your rules"),
+            L("sites", "Focus & blocked sites", "what focus mode closes, and when"),
+            L("voice", "Voice", "push to talk, read aloud, \"Hey %s\"" % soul.name()),
+            L("access", "Screen access", access.level().title() + " · what it may read, type and click"),
+            L("activity", "Activity", ("On" if activity.on() else "Off") + " · what you use, minute by minute"),
+            L("calendar", "Calendar", "Google · " + ("connected" if gcal.signed_in() else "not connected")),
+            L("notes", "Notes", "search by meaning: " + ("on this laptop" if notes.source() == "ollama"
+                                                        else "your provider, then this laptop")),
+            L("features", "Features", "switch single commands on or off"),
+            {"type": "link", "id": "chat", "label": "Chat", "desc": "tasks done by your answer provider",
+             "action": True},
+        ]},
+        {"title": "Answers", "items": [
+            {"type": "select", "id": "provider", "label": "Provider", "value": p,
+             "options": [{"value": key, "label": v[0]} for key, v in cane.PROVIDERS.items()]},
+            {"type": "text", "id": "key", "label": "API key", "secret": True, "button": "Save",
+             "disabled": not keyed, "value": "",
+             "placeholder": "paste a key" if keyed else "not needed for Ollama",
+             "desc": ("saved in Windows Credential Manager ····" + k[-4:]) if k else
+                     ("no key saved - paste one and press Save" if keyed else "")},
+            {"type": "combo", "id": "model", "label": "Model", "value": cane.current_model(p),
+             "options_from": "models"},
+            B("test", "Test", note="checks it answers and can do tasks"),
+        ]},
+    ], "footer": "Changes apply straight away"}
+
+
+def page_personality():
+    import soul
+    soul.ensure()
+    s = soul.load()
+    return {"title": "Personality", "sections": [
+        {"items": [
+            {"type": "text", "id": "soul_name", "label": "Name", "value": s["name"],
+             "desc": "also the wake word: \"Hey %s\"" % s["name"]},
+            {"type": "select", "id": "soul_preset", "label": "Start from",
+             "value": "", "options": [{"value": "", "label": "a preset…"}] +
+             [{"value": k, "label": k} for k in soul.PRESETS]},
+            {"type": "text", "id": "soul_personality", "label": "How it talks", "multiline": True,
+             "value": s["personality"]},
+            {"type": "text", "id": "soul_about", "label": "About you", "multiline": True,
+             "value": s["about"], "placeholder": "name, work, hours, habits"},
+            {"type": "text", "id": "soul_rules", "label": "Rules", "multiline": True,
+             "value": s["rules"]},
+        ]},
+        {"title": "Memory", "items": [
+            {"type": "list", "id": "memory", "empty": "nothing remembered yet - say "
+             "\"remember that …\"", "remove": "forget",
+             "items": [{"key": str(i), "text": m} for i, m in enumerate(s["memory"])]},
+        ]},
+    ], "footer": "Text saves when you leave the box"}
+
+
+def page_sites():
+    import focus
+    s = focus.load()
+    return {"title": "Focus & blocked sites", "sections": [
+        {"title": "During focus", "items": [
+            {"type": "list", "id": "sites", "empty": "nothing", "remove": "remove",
+             "items": [{"key": x, "text": x} for x in s["sites"]],
+             "add": "a site, e.g. reddit or instagram.com"},
+        ]},
+        {"title": "Schedules", "items": [
+            {"type": "list", "id": "blocks", "empty": "none", "remove": "remove",
+             "items": [{"key": str(i), "text": b["site"], "sub": "%s–%s %s" % (
+                 b["start"], b["end"], focus._day_words(b["days"]))}
+                 for i, b in enumerate(s["blocks"])],
+             "add": "site and time, e.g. youtube 9-12 weekdays"},
+        ]},
+    ]}
+
+
+def page_voice():
+    import soul
+    import voice
+    return {"title": "Voice", "sections": [
+        {"items": [
+            I("Push to talk: Ctrl+Alt+V, or the mic in the pill", dim=False),
+            T("wake", "Wake word: \"Hey %s\"" % soul.name(),
+              "Off by default. Listens on this laptop only and sends nothing. "
+              "About 2 s of CPU per phrase heard while on", cane.setting("wake", False)),
+            T("speak", "Read answers aloud", "Answers and chat replies; code is left out",
+              cane.setting("speak", False)),
+            T("stt", "Use Whisper for speech to text",
+              "Accurate, ~2 s. Off: Windows' own, instant but it got 4 of 6 test commands wrong",
+              voice.engine() == "whisper"),
+            I("The microphone follows Screen access: at Off nothing listens"),
+            B("mic_test", "Test microphone"),
+        ]},
+    ]}
+
+
+def page_access():
+    import access
+    return {"title": "Screen access", "sections": [
+        {"items": [
+            {"type": "radio", "id": "level", "value": access.level(), "options": [
+                {"value": "off", "label": "Off", "desc": "No reading, typing, clicking or running."},
+                {"value": "ask", "label": "Ask", "desc": "Reads the window in front when you ask. "
+                 "Asks before every typing, clicking or command."},
+                {"value": "full", "label": "Full", "desc": "Reads and acts on its own for safe actions."}]},
+        ]},
+        {"title": "Always asks, even on Full", "items": [
+            I("Running commands · Enter (it sends messages) · Delete · closing windows or tabs · "
+              "typing a line break · buttons like Send, Delete, Pay, Buy, Install, Submit, "
+              "Sign in, Discard, Close", dim=False),
+        ]},
+        {"items": [
+            T("access_keep", "Keep Full after a restart", "Off: a restart drops Full back to Ask",
+              cane.setting("access_keep", False)),
+            T("screenshots", "Screenshots to the vision model",
+              "When reading text isn't enough, a screenshot of the window in front goes to "
+              "your provider's vision model", cane.setting("screenshots", True)),
+            I("Panic key Ctrl+Alt+Esc drops to Off and stops what it is doing. The eyes turn "
+              "orange whenever it reads or acts."),
+            B("log", "Action log"),
+        ]},
+    ]}
+
+
+def page_activity():
+    import activity
+    try:
+        days = activity._rows("SELECT COUNT(DISTINCT substr(minute,1,10)), "
+                              "SUM(active) FROM activity")[0]
+    except Exception:
+        days = (0, 0)
+    return {"title": "Activity", "sections": [
+        {"items": [
+            T("activity", "Track activity",
+              "Which app and site is in front, minute by minute, and active vs idle. No "
+              "keystrokes, screenshots or page contents. Stays on this laptop; deleted after "
+              "%d days." % activity.KEEP_DAYS, activity.on()),
+            T("checkin", "Morning check-in", "Yesterday in one toast, the first time after 8 AM",
+              cane.setting("checkin", True)),
+            I("Recorded: %d day%s, %d h active" % (days[0] or 0, "" if days[0] == 1 else "s",
+                                                  (days[1] or 0) // 3600), dim=False),
+            I("Ask: what did I do today · when am I most productive · how long on youtube this week"),
+            B("wipe", "Delete everything", confirm="Delete all recorded activity? This can't be undone."),
+        ]},
+    ]}
+
+
+def page_calendar():
+    import gcal
+    cid, secret = gcal.client()
+    return {"title": "Calendar", "sections": [
+        {"title": "Google Calendar · " + ("connected" if gcal.signed_in() else "not connected"),
+         "items": [
+            {"type": "text", "id": "gcal_id", "label": "Client ID", "value": cid},
+            {"type": "text", "id": "gcal_secret", "label": "Client secret", "secret": True,
+             "value": "", "button": "Save",
+             "desc": "saved in Windows Credential Manager" if secret else "nothing saved yet"},
+            B("gcal_signin", "Sign in with Google"),
+            B("gcal_signout", "Sign out"),
+            T("meeting_reminders", "Meeting reminders",
+              "A toast %d minutes before each meeting" % gcal.REMIND_BEFORE,
+              cane.setting("meeting_reminders", True)),
+        ]},
+        {"title": "Setting it up", "items": [
+            I("1. Open console.cloud.google.com and create a project (any name).\n"
+              "2. APIs & Services › Library: enable Google Calendar API.\n"
+              "3. OAuth consent screen: External, app name Tavinor, your email; under "
+              "Test users add your own Google address.\n"
+              "4. Credentials › Create credentials › OAuth client ID › Desktop app.\n"
+              "5. Paste the Client ID and secret here, press Save, then Sign in with Google.\n"
+              "Tavinor asks only for calendar events. The sign-in token is kept in Windows "
+              "Credential Manager, never in a file."),
+        ]},
+    ]}
+
+
+def page_notes():
+    import notes
+    rows = notes.load()
+    used = sorted({k for r in rows for k in r["vec"]})
+    return {"title": "Notes", "sections": [
+        {"items": [
+            T("embed", "Only on this laptop",
+              "On: Ollama's nomic-embed-text, nothing leaves the laptop. Off: your answer "
+              "provider's embedding model first (note text is sent to it), Ollama if that fails",
+              notes.source() == "ollama"),
+            I("%d notes. Indexed with: %s" % (len(rows), ", ".join(used) or "nothing yet"), dim=False),
+            I("Say: note: …  ·  find note about …  ·  notes"),
+        ]},
+    ]}
+
+
+def page_features():
+    return {"title": "Features", "sections": [
+        {"items": [T("feature:" + key, label, "", cane.feature_on(key))
+                   for key, label, _ in cane.FEATURES]},
+        {"items": [I("A switched-off command replies that it is off")]},
+    ]}
+
+
+PAGES = {"main": page_main, "personality": page_personality, "sites": page_sites,
+         "voice": page_voice, "access": page_access, "activity": page_activity,
+         "calendar": page_calendar, "notes": page_notes, "features": page_features}
+
+
+def page(name):
+    return PAGES.get(name, page_main)()
+
+
+# ------------------------------------------------------------------ changes
+
+SIMPLE = {"cloud_answers", "hover", "hover_slow", "claude", "wake", "speak",
+          "access_keep", "screenshots", "activity", "checkin", "meeting_reminders"}
+
+
+def act(bar, pg, rid, value):
+    """Apply one change. Returns {"note": str, "ok": bool, "reload": bool,
+    "show": text to show in a sheet, "options": [...]}."""
+    import bridge
+    if rid in SIMPLE:
+        cane.set_setting(rid, bool(value))
+        if rid in ("hover", "hover_slow"):
+            bridge.publish("config", ui_config())
+        return {"reload": rid in ("activity",)}
+    if rid.startswith("feature:"):
+        cane.set_setting(rid, bool(value))
+        return {}
+    if rid == "startup":
+        cane.install_startup() if value else cane.remove_startup()
+        return {}
+    if rid == "stt":
+        cane.set_setting("stt", "whisper" if value else "windows")
+        return {}
+    if rid == "embed":
+        cane.set_setting("embed", "ollama" if value else "provider")
+        return {"reload": True}
+    if rid == "chat":
+        bar.root.after(0, lambda: __import__("agent").open_window(bar))
+        return {}
+
+    # answers
+    if rid == "provider":
+        if value not in cane.PROVIDERS:
+            raise ValueError("unknown provider")
+        cane.set_setting("provider", value)
+        return {"reload": True}
+    if rid == "key":
+        cane.key_set(cane.provider(), str(value).strip())
+        return {"reload": True}
+    if rid == "models":
+        return {"options": cane.provider_models(cane.provider())}
+    if rid == "model":
+        p = cane.provider()
+        cane.set_setting("answer_model" if p == "ollama" else "model:" + p, str(value).strip())
+        return {}
+    if rid == "test":
+        _later(pg, rid, _test_answers)
+        return {"note": "asking…"}
+
+    # personality
+    if rid.startswith("soul_"):
+        import soul
+        s = soul.load()
+        field = rid[5:]
+        if field == "preset":
+            if value in soul.PRESETS:
+                s["personality"] = soul.PRESETS[value]
+                soul.save(s)
+            return {"reload": True}
+        if field in ("name", "personality", "about", "rules"):
+            s[field] = str(value).strip()[:4000] or (soul.DEFAULT_NAME if field == "name" else "")
+            soul.save(s)
+            return {"reload": field == "name", "note": "saved"}
+    if rid == "memory":                            # value = index to forget
+        import soul
+        soul.forget(int(value))
+        return {"reload": True}
+
+    # blocked sites
+    if rid == "sites":
+        site = str(value.get("add") or value.get("remove") or "").strip().lower()
+        action = "add" if value.get("add") else "remove"
+        msg = cane.dispatch({"intent": "block", "action": action, "site": site})
+        return {"reload": True, "note": msg}
+    if rid == "blocks":
+        import focus
+        import re
+        if value.get("add"):
+            v = str(value["add"]).strip().lower()
+            item = cane.quick("block " + re.sub(r"\s+(weekdays|weekends|daily)$", r" on \1", v))
+            if not item:
+                return {"note": "didn't understand - try: youtube 9-12 weekdays", "ok": False}
+            return {"reload": True, "note": cane.dispatch(item)}
+        i = int(value["remove"])
+        with focus._LOCK:
+            s = focus.load()
+            if 0 <= i < len(s["blocks"]):
+                s["blocks"].pop(i)
+                focus.save(s)
+        return {"reload": True, "note": "removed"}
+
+    # voice
+    if rid == "mic_test":
+        import voice
+        if not voice.ears_allowed():
+            return {"note": "Screen access is Off - the mic is off", "ok": False}
+        _later(pg, rid, lambda: ((lambda t: ("heard: " + t, True) if t else ("heard nothing", False))(
+            voice.listen_once()[0])))
+        return {"note": "listening… say something"}
+
+    # access
+    if rid == "level":
+        import access
+        access.set_level(str(value))
+        return {}
+    if rid == "log":
+        import access
+        rows = access.recent()
+        return {"show": "\n".join("%s  %-4s %-7s %s%s -> %s" % (
+            r[0][5:16].replace("T", " "), r[1], r[2], r[3][:30],
+            " (approved)" if r[4] else "", r[5][:40]) for r in rows) or "nothing yet"}
+
+    # activity
+    if rid == "wipe":
+        import activity
+        activity.wipe()
+        return {"reload": True, "note": "deleted - nothing recorded"}
+
+    # calendar
+    if rid == "gcal_id":
+        import gcal
+        gcal.set_client(str(value), gcal.client()[1])
+        return {"note": "saved"}
+    if rid == "gcal_secret":
+        import gcal
+        gcal.set_client(gcal.client()[0], str(value).strip() or gcal.client()[1])
+        return {"reload": True, "note": "saved - now sign in"}
+    if rid == "gcal_signin":
+        import gcal
+        _later(pg, rid, lambda: (gcal.sign_in(), True))
+        return {"note": "a browser tab opened - finish there"}
+    if rid == "gcal_signout":
+        import gcal
+        gcal.sign_out()
+        return {"reload": True, "note": "signed out"}
+    raise ValueError("unknown setting %r" % rid)
+
+
+def _test_answers():
+    """Same two checks as the Tk Test button: it answers, and it can drive
+    the chat's tools."""
+    import agent
+    t0 = time.time()
+    try:
+        reply = cane.answer("Reply with the single word OK.", timeout=30).splitlines()[0]
+    except RuntimeError as e:
+        return str(e), False
+    if reply.startswith("("):                      # "(" = fell back
+        return reply, False
+    try:
+        raw, note = cane.complete(agent.system_prompt(), [{
+            "role": "user", "content": "set a timer for 2 minutes"}], 45)
+        acts = agent.parse(raw)["actions"]
+        tasks_ok = not note and any(a["intent"] == "timer" and a.get("arg") == "2" for a in acts)
+    except RuntimeError:
+        tasks_ok = False
+    return ("answers ✓ · tasks %s  (%.1f s)" % (
+        "✓" if tasks_ok else "✗ - pick another model for the chat", time.time() - t0), tasks_ok)
+
+
+def ui_config():
+    return {"hover": bool(cane.setting("hover", True)),
+            "hover_slow": bool(cane.setting("hover_slow", False))}

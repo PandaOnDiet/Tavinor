@@ -8,8 +8,10 @@ contextBridge.exposeInMainWorld('tav', {
   interactive: (on) => ipcRenderer.send('interactive', !!on),
   opened: (on) => ipcRenderer.send('open', !!on),
   focus: () => ipcRenderer.send('focus'),
+  openSettings: () => ipcRenderer.send('settings'),
+  closeMe: () => ipcRenderer.send('close-me'),
   on: (channel, fn) => {
-    if (['hello', 'events', 'cursor'].includes(channel)) {
+    if (['hello', 'events', 'cursor', 'backdrop'].includes(channel)) {
       ipcRenderer.on(channel, (_e, data) => fn(data));
     }
   },

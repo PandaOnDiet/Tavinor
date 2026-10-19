@@ -13,6 +13,11 @@
     <WindowsPackageType>None</WindowsPackageType>
     <SelfContained>true</SelfContained>
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <!-- Only ever runs inside the MSIX, which loads the Windows App Runtime through
+         its PackageDependency. The unpackaged bootstrapper fails there
+         (0x80070032) and kills the process before it registers with COM. -->
+    <WindowsAppSdkBootstrapInitialize>false</WindowsAppSdkBootstrapInitialize>
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
     <ApplicationIcon>..\tavinor.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>

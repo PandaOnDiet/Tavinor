@@ -3325,8 +3325,10 @@ def start_ui(bar, port):
         return None
     env = dict(os.environ, TAVINOR_PORT=str(port), TAVINOR_UI_TOKEN=bridge.UI_TOKEN)
     env.pop("ELECTRON_RUN_AS_NODE", None)
-    launch = lambda: subprocess.Popen([str(ELECTRON), str(UI_DIR)], env=env,
-                                      cwd=str(UI_DIR))
+    argv = [str(ELECTRON), str(UI_DIR)]
+    if os.environ.get("TAVINOR_DEBUG_PORT", "").isdigit():   # development: attach DevTools
+        argv.append("--remote-debugging-port=" + os.environ["TAVINOR_DEBUG_PORT"])
+    launch = lambda: subprocess.Popen(argv, env=env, cwd=str(UI_DIR))
     procs = [launch()]
     bar.electron = True
 

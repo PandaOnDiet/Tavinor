@@ -462,6 +462,7 @@ Each fires once. `notes.json` is plain JSON, so you can edit or clear it by hand
 | `CANE_MODEL` | `qwen3:1.7b` | Router: any local ollama model |
 | `CANE_ANSWER_MODEL` | `nemotron-3-super:cloud` | Answers: any ollama model, local or cloud |
 | `CANE_CWD` | `~` | Working directory Claude escalations start in |
+| `TAVINOR_DEBUG_PORT` | (unset) | Development: start the notch with Chrome DevTools on this port |
 
 `settings.json` holds everything the Settings window changes (`claude`,
 `cloud_answers`, `provider`, `answer_model` for Ollama, `model:<provider>` for

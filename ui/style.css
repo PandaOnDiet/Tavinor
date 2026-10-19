@@ -153,3 +153,5 @@ button { font-family: inherit; }
 .toast .r span:last-child { color: rgba(232, 236, 245, .6); font-size: 12.5px; flex: none; }
 .toast .acts { margin-top: 14px; justify-content: flex-end; }
 .toast .btn { height: 38px; font-size: 14px; padding: 0 16px; }
+
+.btn svg { vertical-align: -3px; margin-right: 4px; }

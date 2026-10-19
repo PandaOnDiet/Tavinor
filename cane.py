@@ -1680,8 +1680,7 @@ def dispatch(intent, ui=None):
             text = "Couldn't get an answer: %s" % e
         if ui:
             ui.remember_turn(arg, text)
-            ui.show_answer(arg, text)
-            voice.maybe_speak(text)
+            ui.show_answer(arg, text)            # reads it aloud too
             return "answered" if not text.startswith("Couldn't") else text[:60]
         return text
 
@@ -1886,8 +1885,13 @@ def run(text, ui, item=None):
         if hasattr(ui, "set_face"):
             ui.set_face("thinking")
         item = item or parse(text)
-        ui.status(dispatch(item, ui),
-                  keep=item.get("intent") not in HIDE_AFTER)
+        t0 = time.monotonic()
+        said = dispatch(item, ui)
+        ui.status(said, keep=item.get("intent") not in HIDE_AFTER)
+        # A command's reply is read aloud too ("timer set for 10 min"), unless
+        # an answer already was, or it only opened something.
+        if item.get("intent") not in HIDE_AFTER and voice._spoke[0] < t0:
+            voice.maybe_speak(str(said))
     except Exception as e:  # a bad command must not kill the daemon
         ui.status("error: " + str(e))
 
@@ -2490,6 +2494,7 @@ class Bar:
 
     def show_answer(self, question, text):
         self.root.after(0, lambda: self._answer_window(question, text))
+        voice.maybe_speak(text)
 
     # -- settings
 

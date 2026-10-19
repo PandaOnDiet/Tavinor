@@ -39,3 +39,9 @@
 .send:active { transform: scale(.92); }
 .send:disabled { opacity: .35; cursor: default; }
 #clear.armed { background: rgba(255, 90, 90, .25); color: #ffbcbc; }
+
+.m.say { position: relative; }
+.spk { position: absolute; right: -34px; bottom: 2px; width: 28px; height: 28px; border-radius: 14px; border: none; cursor: pointer;
+  background: transparent; color: rgba(232, 236, 245, .45); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; }
+.m.say:hover .spk, .spk:focus-visible { opacity: 1; }
+.spk:hover { background: rgba(255, 255, 255, .08); color: #fff; }

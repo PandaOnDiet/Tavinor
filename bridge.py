@@ -158,6 +158,8 @@ class Remote:
 
     def show_answer(self, question, text):
         publish("answer", {"question": question, "text": text})
+        import voice
+        voice.maybe_speak(text)
 
     def hide(self):
         publish("hide")
@@ -260,6 +262,13 @@ def ui_call(bar, tool, args):
         return {"ok": True}
     if tool == "day":
         return ui_day()
+    if tool == "speak":                       # the speaker buttons: always, on demand
+        import voice
+        if args.get("stop"):
+            voice.stop_speaking()
+        else:
+            voice.speak(str(args.get("text", ""))[:4000])
+        return {"ok": True}
     if tool.startswith("chat_"):
         import agent
         return agent.ui_call(bar, tool, args)

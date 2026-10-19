@@ -250,6 +250,8 @@ function showToday() {
   layoutToasts();
 }
 
+$('btn-speak').addEventListener('click', () => window.tav.call('speak', { text: $('reply-a').textContent }).catch(() => {}));
+
 function showReply(question, text) {
   $('reply-q').textContent = question ? 'You · “' + question + '”' : '';
   $('reply-a').textContent = text || '…';

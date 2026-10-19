@@ -170,6 +170,7 @@ def transcribe(path):
 # ------------------------------------------------------------- speaking
 
 _speaker = [None]
+_spoke = [0.0]                 # monotonic time of the last speak(), so run() won't repeat it
 
 
 def clean_for_speech(text):
@@ -186,6 +187,7 @@ def speak(text, wav=""):
     text = clean_for_speech(text)
     if not text:
         return None
+    _spoke[0] = time.monotonic()
     argv, env = _ps(SPEAK_PS, wav=wav, say=text)
     p = subprocess.Popen(argv, env=env, creationflags=subprocess.CREATE_NO_WINDOW)
     _speaker[0] = p

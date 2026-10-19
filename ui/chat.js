@@ -3,6 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const log = $('log'), input = $('input'), sendBtn = $('send');
 let busy = false;
+const SPK = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM16 9a4 4 0 010 6M18.5 6.5a7.5 7.5 0 010 11"/></svg>';
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -29,6 +30,15 @@ function show(node) {
 function add(kind, text) {
   const m = el('div', 'm ' + kind);
   if (kind === 'me' || kind === 'say') m.append(withCode(text));
+  if (kind === 'say') {
+    const b = el('button', 'spk');
+    b.type = 'button';
+    b.title = 'Read aloud';
+    b.setAttribute('aria-label', 'Read aloud');
+    b.innerHTML = SPK;
+    b.addEventListener('click', () => window.tav.call('speak', { text }).catch(() => {}));
+    m.append(b);
+  }
   else m.textContent = kind === 'result' ? text.replace(' -> ', '  →  ') : text;
   show(m);
 }

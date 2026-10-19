@@ -2,7 +2,7 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
 const body = $('body');
-let current = 'main';
+let current = 'main', parent = 'main';   // parent: where Back goes
 const notes = {};                    // row id -> its note element, for late "note" events
 
 function el(tag, cls, text) {
@@ -324,6 +324,7 @@ async function load(name, anim, keepScroll) {
   }
   const top = body.scrollTop;
   current = name;
+  parent = page.back || 'main';
   for (const k of Object.keys(notes)) delete notes[k];
   $('title').textContent = page.title;
   $('back').hidden = name === 'main';
@@ -341,13 +342,13 @@ async function load(name, anim, keepScroll) {
   body.scrollTop = keepScroll ? top : 0;
 }
 
-$('back').addEventListener('click', () => load('main', 'back'));
+$('back').addEventListener('click', () => load(parent, 'back'));
 $('close').addEventListener('click', () => window.tav.closeMe());
 $('sheet-close').addEventListener('click', () => { $('sheet').hidden = true; });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('sheet').hidden) $('sheet').hidden = true;
-  else if (current !== 'main') load('main', 'back');
+  else if (current !== 'main') load(parent, 'back');
   else window.tav.closeMe();
 });
 

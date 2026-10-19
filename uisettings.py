@@ -243,16 +243,63 @@ def page_display():
 
 
 def page_general():
+    """How Tavinor opens and a few odds and ends; the commands it runs have
+    their own page."""
+    on = sum(tavinor.feature_on(k) for k, _, _ in tavinor.FEATURES)
     return {"title": "General", "sections": [
-        {"items": [
-            T("hover_slow", "Hover needs a longer rest", "Fewer accidental opens",
+        {"title": "Opening", "items": [
+            T("hover_slow", "Hover needs a longer rest", "Fewer accidental opens when the pointer passes",
               tavinor.setting("hover_slow", False)),
-            T("claude", "Claude Code button in chat", "Nothing goes to it unless you press it",
+        ]},
+        {"title": "Shortcuts", "items": [
+            I("Ctrl+Alt+Space  ·  open the bar", dim=False),
+            I("Ctrl+Alt+V  ·  push to talk", dim=False),
+            I("Ctrl+Alt+Esc  ·  panic key: stops typing and clicking, sets access to Off", dim=False),
+        ]},
+        {"items": [
+            N("commands", "Commands", "%d of %d on" % (on, len(tavinor.FEATURES)), "sliders"),
+        ]},
+        {"title": "Chat", "items": [
+            T("claude", "Claude Code button", "Hands the chat to Claude Code - only when you press it",
               tavinor.setting("claude", False)),
         ]},
-        {"title": "Features", "items": [T("feature:" + key, label, "", tavinor.feature_on(key))
-                                        for key, label, _ in tavinor.FEATURES]},
     ]}
+
+
+# What each command does, with real phrases (README "What it handles").
+COMMAND_GROUPS = [
+    ("System", [
+        ("apps", "“open whatsapp”, “open downloads”, “open github.com”"),
+        ("media", "“volume 40”, “quieter”, “pause”, “skip this one”"),
+        ("brightness", "“brightness 70”, “dim the screen” - built-in screen only"),
+        ("lock", "“lock my laptop”"),
+        ("screenshot", "“take a screenshot” - saved to Pictures\\Screenshots"),
+        ("theme", "“dark mode”, “turn off dark mode”"),
+    ]),
+    ("Everyday", [
+        ("timers", "“timer 10 min” - rings when it ends"),
+        ("reminders", "“remind me in 20 minutes to…”, “what’s left”, “mark 2 done”"),
+        ("weather", "“weather”, “weather in goa”"),
+        ("search", "“google best laptops” - in your browser"),
+        ("music", "“play sapphire” - plays the top YouTube result"),
+        ("files", "“clean up my downloads” - shows a plan; nothing moves until you approve"),
+    ]),
+    ("Productivity", [
+        ("focus", "Focus sessions, and blocking your distracting sites during them"),
+        ("tasks", "Tasks, subtasks and daily habits"),
+        ("notes", "Save notes and find them by meaning"),
+        ("calendar", "Today’s meetings, reminders before them, “plan my day”"),
+    ]),
+]
+
+
+def page_commands():
+    labels = {k: label for k, label, _ in tavinor.FEATURES}
+    return {"title": "Commands", "back": "general", "sections": [
+        {"title": group, "items": [T("feature:" + k, labels[k], desc, tavinor.feature_on(k))
+                                   for k, desc in rows]}
+        for group, rows in COMMAND_GROUPS
+    ], "footer": "Off: Tavinor won’t run that kind of command. Everything else keeps working."}
 
 
 def page_personality():
@@ -440,7 +487,7 @@ def page_features():
     ]}
 
 
-PAGES = {"main": page_main, "brain": page_brain, "general": page_general, "display": page_display,
+PAGES = {"main": page_main, "brain": page_brain, "general": page_general, "commands": page_commands, "display": page_display,
          "personality": page_personality, "sites": page_sites,
          "voice": page_voice, "access": page_access, "activity": page_activity,
          "calendar": page_calendar, "notes": page_notes, "features": page_features}

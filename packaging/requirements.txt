@@ -1,0 +1,6 @@
+# Exactly what the installed Tavinor needs; packaging/build.py builds in a
+# clean virtual environment from this file, so nothing else rides along.
+faster-whisper==1.2.1
+piper-tts==1.8.0
+anthropic==1.8.0
+pyinstaller==6.22.3

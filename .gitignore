@@ -14,3 +14,6 @@ notebook.json
 bridge.json
 # Piper voice files, downloaded (60 MB)
 voices/
+
+# build output (packaging/build.py)
+packaging/out/

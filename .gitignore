@@ -17,3 +17,7 @@ voices/
 
 # build output (packaging/build.py)
 packaging/out/
+widget/bin/
+widget/obj/
+widget/test/bin/
+widget/test/obj/

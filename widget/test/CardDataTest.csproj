@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Checks CardData against sample snapshots: dotnet run, project widget/test -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\CardData.cs" />
+    <None Include="..\card.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

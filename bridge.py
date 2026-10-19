@@ -260,6 +260,9 @@ def ui_call(bar, tool, args):
         return {"ok": True}
     if tool == "day":
         return ui_day()
+    if tool.startswith("chat_"):
+        import agent
+        return agent.ui_call(bar, tool, args)
     if tool == "toast_click":
         return toast_click(str(args.get("id", "")), args.get("button"))
     if tool == "done":

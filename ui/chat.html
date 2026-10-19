@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'">
+<title>Tavinor chat</title>
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="chat.css">
+</head>
+<body>
+<div class="panel" id="panel">
+  <div class="bd" id="bd"></div>
+  <header class="top">
+    <div class="who"><h1 id="title">Chat</h1><div class="model" id="model"></div></div>
+    <button class="icon" id="clear" type="button" aria-label="Clear the chat" title="Clear the chat">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>
+    </button>
+    <button class="icon" id="close" type="button" aria-label="Close the chat">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </header>
+  <main class="body log" id="log" aria-live="polite"></main>
+  <div class="typing" id="typing" hidden><i></i><i></i><i></i></div>
+  <footer class="composer">
+    <div class="box">
+      <textarea id="input" rows="1" placeholder="Ask, or tell it what to do" aria-label="Message"></textarea>
+      <button class="send" id="send" type="button" aria-label="Send">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+      </button>
+    </div>
+    <button class="link" id="claude" type="button" hidden>Hand to Claude Code</button>
+  </footer>
+</div>
+<script src="chat.js"></script>
+</body>
+</html>

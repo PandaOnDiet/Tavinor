@@ -296,8 +296,143 @@ def converse(text, ui=None, show=None, approve=None, propose=None,
 
 # ------------------------------------------------------------- window
 
+def history():
+    """The recent conversation as the window shows it, so it picks up where
+    it left off."""
+    out = []
+    for r in load()[-30:]:
+        if r["role"] == "user" and r["content"].startswith("RESULTS:"):
+            out += [{"kind": "result", "text": line} for line in r["content"].splitlines()[1:]]
+        elif r["role"] == "user":
+            out.append({"kind": "me", "text": r["content"]})
+        elif r.get("say") and not parse(r["content"])["actions"]:
+            out.append({"kind": "say", "text": r["say"]})
+    return out
+
+
+def hand_off():
+    """Your last message to Claude Code, in a new console. Returns it, or ""."""
+    last = next((r["content"] for r in reversed(load())
+                 if r["role"] == "user" and not r["content"].startswith("RESULTS:")), "")
+    if last:
+        cane.subprocess.Popen([cane.shutil.which("claude"), last], cwd=cane.ESCALATE_CWD,
+                              creationflags=cane.subprocess.CREATE_NEW_CONSOLE)
+    return last
+
+
+# ------------------------------------------------------------- Electron chat (E2)
+# The glass chat window talks to converse() through these. Cards (Allow /
+# Remember) wait here for a click; one message runs at a time.
+
+_CARDS = {}                    # card id -> {"lines", "buttons", "fns"}
+_RUN = threading.Lock()
+
+
+def _pub(kind, **data):
+    import bridge
+    bridge.publish("chat", dict(data, kind=kind))
+
+
+def _card(lines, buttons):
+    """buttons: [(label, fn -> outcome text)]. Returns the card id."""
+    import secrets
+    cid = secrets.token_hex(4)
+    _CARDS[cid] = {"lines": lines, "buttons": [b[0] for b in buttons],
+                   "fns": [b[1] for b in buttons]}
+    _pub("card", id=cid, lines=lines, buttons=_CARDS[cid]["buttons"])
+    return cid
+
+
+def _approve(actions):
+    done, answer = threading.Event(), []
+
+    def pick(ok):
+        def f():
+            answer.append(ok)
+            done.set()
+            return "approved" if ok else "declined"
+        return f
+    cid = _card(["Allow these?"] + ["• " + describe(a) + why(a) for a in actions],
+                [("Decline", pick(False)), ("Allow", pick(True))])
+    if not done.wait(300):                 # five minutes, then it counts as no
+        if _CARDS.pop(cid, None):
+            _pub("settle", id=cid, text="no answer - not done")
+    return bool(answer and answer[0])
+
+
+def _propose(fact):
+    def yes():
+        try:
+            import soul
+            soul.remember(fact)
+            return "saved to memory"
+        except Exception as e:
+            return "couldn't save: %s" % e
+    _card(["Remember this?", fact], [("No", lambda: "not saved"), ("Remember", yes)])
+
+
+def _send(bar, text):
+    text = text.strip()[:4000]
+    if not text:
+        return {"ok": False}
+    if not _RUN.acquire(blocking=False):
+        return {"busy": True}
+
+    def show(kind, t):
+        _pub(kind, text=t)
+        if kind == "say":
+            import voice
+            voice.maybe_speak(t)
+
+    def go():
+        try:
+            converse(text, ui=bar, show=show, approve=_approve, propose=_propose)
+        except Exception as e:
+            show("error", "error: %s" % e)
+        finally:
+            _RUN.release()
+            _pub("busy", on=False)
+    _pub("me", text=text)
+    _pub("busy", on=True, model=cane.current_model())
+    threading.Thread(target=go, daemon=True).start()
+    return {"ok": True}
+
+
+def ui_call(bar, tool, args):
+    if tool == "chat_history":
+        return {"rows": history(), "name": soul_name(), "model": cane.current_model(),
+                "busy": _RUN.locked(),
+                "cards": [{"id": k, "lines": c["lines"], "buttons": c["buttons"]}
+                          for k, c in list(_CARDS.items())],
+                "claude": bool(cane.setting("claude", False) and cane.shutil.which("claude"))}
+    if tool == "chat_send":
+        return _send(bar, str(args.get("text", "")))
+    if tool == "chat_decide":
+        card = _CARDS.pop(str(args.get("id", "")), None)
+        if card:
+            try:
+                out = card["fns"][int(args.get("button"))]()
+            except (IndexError, TypeError, ValueError):
+                out = "not done"
+            _pub("settle", id=str(args["id"]), text=out)
+        return {"ok": bool(card)}
+    if tool == "chat_clear":
+        clear()
+        return {"ok": True}
+    if tool == "chat_handoff":
+        last = hand_off() if cane.shutil.which("claude") else ""
+        if last:
+            _pub("note", text="handed to Claude Code: " + last[:60])
+        return {"ok": bool(last)}
+    raise ValueError("unknown chat tool %r" % tool)
+
+
 def open_window(bar, first=None, back=None):
     """`first`: a message to send at once. `back`: reopen Settings."""
+    if getattr(bar, "electron", False):
+        import bridge
+        bridge.publish("chat_open", {"first": first or ""})
+        return
     bar.root.after(0, lambda: _window(bar, first, back))
 
 
@@ -478,27 +613,16 @@ def _window(bar, first=None, back=None):
     cv.create_window(W - 24, H - 28, anchor="e",
                      window=bar._button(w, "Clear", wipe))
     if cane.setting("claude", False) and cane.shutil.which("claude"):
-        def hand_off():
-            last = next((r["content"] for r in reversed(load())
-                         if r["role"] == "user"
-                         and not r["content"].startswith("RESULTS:")), "")
+        def handed():
+            last = hand_off()
             if last:
-                cane.subprocess.Popen(
-                    [cane.shutil.which("claude"), last], cwd=cane.ESCALATE_CWD,
-                    creationflags=cane.subprocess.CREATE_NEW_CONSOLE)
                 put("note", "handed to Claude Code: " + last[:60])
         cv.create_window(W - 84, H - 28, anchor="e",
-                         window=bar._button(w, "Hand to Claude Code", hand_off))
+                         window=bar._button(w, "Hand to Claude Code", handed))
 
     # Earlier conversation, so the chat picks up where it left off.
-    for r in load()[-30:]:
-        if r["role"] == "user" and r["content"].startswith("RESULTS:"):
-            for line in r["content"].splitlines()[1:]:
-                put("result", line)
-        elif r["role"] == "user":
-            put("me", r["content"])
-        elif r.get("say") and not parse(r["content"])["actions"]:
-            put("say", r["say"])
+    for m in history():
+        put(m["kind"], m["text"])
 
     entry.bind("<Return>", lambda e: send())
     w.focus_force()

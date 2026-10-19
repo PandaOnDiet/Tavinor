@@ -37,7 +37,7 @@ function call(tool, args = {}, timeout = 30000) {
   });
 }
 
-let win, sets = null;
+let win, sets = null, chats = null;
 let side = 'center';
 
 // Settings: its own glass window beside the notch, movable by its header.
@@ -64,6 +64,31 @@ async function openSettings() {
   sets.on('closed', () => { sets = null; });
 }
 
+// Chat: the same kind of glass window, taller. `first` is sent once it loads.
+function openChat(first) {
+  if (chats && !chats.isDestroyed()) { chats.show(); chats.focus(); return; }
+  const wa = screen.getPrimaryDisplay().workArea;
+  const nb = win.getBounds();
+  const x = Math.min(nb.x + nb.width + 8, wa.x + wa.width - 540);
+  chats = new BrowserWindow({
+    x, y: wa.y + 12, width: 520, height: Math.min(820, wa.height - 24), frame: false,
+    transparent: true, resizable: false, skipTaskbar: true, hasShadow: false, show: false,
+    backgroundColor: '#00000000',
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true,
+                      nodeIntegration: false, sandbox: true },
+  });
+  chats.loadFile('chat.html', { query: { first: first || '' } });
+  const c = chats;
+  c.once('ready-to-show', async () => {
+    const pic = await backdrop(c).catch(() => null);
+    if (c.isDestroyed()) return;
+    c.webContents.send('backdrop', pic);
+    c.show();
+    c.focus();
+  });
+  c.on('closed', () => { if (chats === c) chats = null; });
+}
+
 function place() {
   const d = screen.getPrimaryDisplay().bounds;
   const x = side === 'left' ? d.x + 40
@@ -81,8 +106,10 @@ async function pump(after) {
       const evs = await call('events', { after, wait: 20 }, 25000);
       misses = 0;
       for (const e of evs) after = Math.max(after, e.id);
-      if (evs.length && win && !win.isDestroyed()) win.webContents.send('events', evs);
-      if (evs.length && sets && !sets.isDestroyed()) sets.webContents.send('events', evs);
+      const open = [win, sets, chats].filter((w) => w && !w.isDestroyed());
+      if (evs.length) for (const w of open) w.webContents.send('events', evs);
+      // An open chat sends `first` itself (it got the event); a new one by query.
+      for (const e of evs) if (e.kind === 'chat_open') openChat(open.includes(chats) ? '' : e.data && e.data.first);
     } catch (e) {
       if (++misses >= 4) return app.quit();
       await new Promise((r) => setTimeout(r, 750));

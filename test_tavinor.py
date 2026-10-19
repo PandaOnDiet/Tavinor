@@ -1726,6 +1726,20 @@ def check_mcp():
     print("mcp: %d checks passed" % n)
 
 
+def check_dizzy():
+    """Circles make Tavinor dizzy; shaking, drags and reading don't
+    (the self-check inside ui/dizzy.js, run with Node if it's installed)."""
+    import shutil
+    node = shutil.which("node")
+    if not node:
+        print("dizzy: skipped (no node)")
+        return
+    out = subprocess.run([node, str(pathlib.Path(__file__).with_name("ui") / "dizzy.js")],
+                         capture_output=True, text=True, timeout=30)
+    assert out.returncode == 0, out.stderr
+    print(out.stdout.strip())
+
+
 def check_local_models():
     """Brain > Local models: states, the memory warning, Use, bad names."""
     import uisettings as u
@@ -1814,6 +1828,7 @@ def check_focus_link():
 
 
 if __name__ == "__main__":
+    check_dizzy()
     check_local_models()
     check_piper()
     check_focus_link()

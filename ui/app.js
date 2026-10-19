@@ -9,7 +9,7 @@ const pane = $('pane'), paneFrame = $('pane-frame');
 const GLOW = {
   idle: 'rgba(110,150,255,.18)', listening: 'rgba(76,141,255,.6)', thinking: 'rgba(160,120,255,.55)',
   done: 'rgba(70,210,140,.5)', error: 'rgba(255,90,90,.55)', focus: 'rgba(60,210,200,.45)',
-  eyes: 'rgba(255,138,61,.6)', sleeping: 'rgba(0,0,0,0)',
+  eyes: 'rgba(255,138,61,.6)', sleeping: 'rgba(0,0,0,0)', dizzy: 'rgba(255,205,90,.5)',
 };
 const HEAD_X = 320, HEAD_Y = 78;       // face centre in window pixels
 const SLEEP_AFTER = 10 * 60 * 1000;
@@ -28,9 +28,10 @@ const PIX = {
   focused: ['......', '######', '######', '######', '######'],
   happy:   ['......', '.#..#.', '#.##.#', '#.##.#', '......'],
   sleepy:  ['......', '......', '......', '######', '######'],
+  dizzy:   ['......', '#.##.#', '.#..#.', '#.##.#', '......'],   // X_X
 };
 const FACE_PIX = { idle: 'rest', listening: 'rest', thinking: 'full', done: 'happy', error: 'full',
-                   focus: 'focused', eyes: 'full', sleeping: 'sleepy' };
+                   focus: 'focused', eyes: 'full', sleeping: 'sleepy', dizzy: 'dizzy' };
 for (const e of eyes.children) for (let i = 0; i < 15; i++) e.append(document.createElement('i'));
 
 function paintEyes(rows) {
@@ -52,6 +53,22 @@ function setFace(state) {
   mic.classList.toggle('on', listening);
   if (state !== 'idle' && state !== 'sleeping') lastActive = Date.now();
 }
+
+// Spun in circles (main.js watches the pointer): X_X eyes, a wobble and
+// orbiting stars for a few seconds, then back to whatever it was doing.
+// Closed, the head drops into view for it.
+let dizzyTimer = null;
+window.tav.on('dizzy', () => {
+  if (mode === 'dizzy' || mode === 'listening' || mode === 'thinking') return;
+  const back = mode;
+  setFace('dizzy');
+  w.classList.add('peek');
+  clearTimeout(dizzyTimer);
+  dizzyTimer = setTimeout(() => {
+    if (mode === 'dizzy') setFace(back);
+    layoutToasts();                   // puts `peek` back the way toasts want it
+  }, 3200);
+});
 
 window.tav.on('cursor', (p) => {
   if (mode === 'thinking') { eyes.style.transform = ''; return; }

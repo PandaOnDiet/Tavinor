@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('tav', {
     ? window.parent.postMessage({ tav: 'close-pane' }, '*')
     : ipcRenderer.send('close-me')),
   on: (channel, fn) => {
-    if (['hello', 'events', 'cursor', 'backdrop'].includes(channel)) {
+    if (['hello', 'events', 'cursor', 'backdrop', 'dizzy'].includes(channel)) {
       ipcRenderer.on(channel, (_e, data) => fn(data));
     }
   },

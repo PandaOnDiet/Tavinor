@@ -4,6 +4,7 @@
 const { app, BrowserWindow, ipcMain, screen, desktopCapturer } = require('electron');
 const http = require('http');
 const path = require('path');
+const { makeDizzy } = require('./dizzy');
 
 const PORT = Number(process.env.TAVINOR_PORT);
 const TOKEN = process.env.TAVINOR_UI_TOKEN;
@@ -140,6 +141,18 @@ app.whenReady().then(async () => {
   reportDisplays();
   screen.on('display-metrics-changed', place);
   for (const ev of ['display-added', 'display-removed']) screen.on(ev, () => { reportDisplays(); place(); });
+  // Spin the pointer in circles and Tavinor gets dizzy. Sampled always
+  // (open or closed), 20 times a second; at most once every 10 s.
+  const spun = makeDizzy();
+  let dizzyAt = 0;
+  setInterval(() => {
+    if (!win || win.isDestroyed()) return;
+    const p = screen.getCursorScreenPoint(), now = Date.now();
+    if (spun(p.x, p.y, now) && now - dizzyAt > 10000) {
+      dizzyAt = now;
+      win.webContents.send('dizzy');
+    }
+  }, 50);
   // Follow the mouse: hop screens only while closed, so it never jumps mid-use.
   setInterval(() => {
     if (where !== 'mouse' || isOpen || !win || win.isDestroyed()) return;

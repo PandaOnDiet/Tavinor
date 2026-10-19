@@ -3430,6 +3430,7 @@ if __name__ == "__main__":
     access.on_start()
     threading.Thread(target=voice.Wake(bar).loop, daemon=True).start()
     threading.Thread(target=voice.piper_voice, daemon=True).start()   # warm the voice
+    __import__("widget").start()                                      # widget.json for the Windows widget
     threading.Thread(target=gcal.reminders, args=(bar,), daemon=True).start()
     if (STARTUP / OLD_VBS).exists():
         install_startup()                    # Cane.vbs -> Tavinor.vbs, once

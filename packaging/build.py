@@ -29,7 +29,7 @@ ELECTRON = ROOT / "ui" / "node_modules" / "electron" / "dist"
 
 # Imported inside functions, so PyInstaller can't see them on its own.
 HIDDEN = ["access", "activity", "agent", "bridge", "face", "focus", "gcal", "hover",
-          "notes", "soul", "tasks", "uisettings", "voice", "winsys", "anthropic"]
+          "notes", "soul", "tasks", "uisettings", "voice", "winsys", "weather", "widget", "anthropic"]
 # Packages that carry DLLs or data files (Whisper's engine, Piper's
 # phoneme data, ONNX runtime).
 COLLECT = ["faster_whisper", "ctranslate2", "onnxruntime", "piper", "tokenizers", "av"]

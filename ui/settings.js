@@ -57,6 +57,7 @@ const ICONS = {
   chart: ['M4.5 19.5h15M7 16v-4M11.5 16V8M16 16v-6', '#46d28c'],
   sliders: ['M5 8h9M18 8h1M5 16h3M12 16h7M14 6v4M8 14v4', '#9aa3b5'],
   display: ['M4 5h16v11H4zM9 20h6M12 16v4', '#3fd2c7'],
+  widget: ['M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z', '#f5a524'],
 };
 
 function icon(name) {

@@ -8,6 +8,7 @@ the Tk settings window called, so behaviour is unchanged; only the look moved.
 Slow actions (Test, Test microphone, Google sign-in) return at once and
 report later with a bridge "note" event: {"page", "id", "text", "ok"}.
 """
+import json
 import threading
 import time
 
@@ -82,6 +83,7 @@ def page_main():
             N("calendar", "Calendar", "Connected" if gcal.signed_in() else "Not connected", "calendar"),
             N("activity", "Activity", "On" if activity.on() else "Off", "chart"),
             N("display", "Display", display_value(), "display"),
+            N("widget", "Widget", (tavinor.setting("widget_place") or {}).get("name", "No city"), "widget"),
             N("general", "General", "", "sliders"),
         ]},
     ]}
@@ -240,6 +242,39 @@ def page_display():
             {"type": "radio", "id": "notch_side", "value": tavinor.setting("notch_side", "center"),
              "options": [{"value": k, "label": v} for k, v in SIDES]}]},
     ], "footer": "Moves straight away"}
+
+
+def page_widget():
+    """The Windows widget: lock screen and widget board."""
+    import widget
+    place = tavinor.setting("widget_place") or {}
+    where = ", ".join(x for x in (place.get("name"), place.get("region"), place.get("country")) if x)
+    try:
+        status = "Last updated %s" % json.loads(widget.FILE.read_text(encoding="utf-8"))["updated"]
+    except (OSError, ValueError, KeyError):
+        status = "Not written yet"
+    return {"title": "Widget", "sections": [
+        {"title": "Weather", "items": [
+            {"type": "text", "id": "widget_place", "label": "City", "value": place.get("name", ""),
+             "button": "Save", "placeholder": "e.g. Noida",
+             "desc": where or "Weather from Open-Meteo: only this city's location is sent"},
+            {"type": "radio", "id": "widget_units", "value": tavinor.setting("widget_units", "c"),
+             "options": [{"value": "c", "label": "Celsius, km/h"}, {"value": "f", "label": "Fahrenheit, mph"}]},
+        ]},
+        {"title": "Show", "items": [T("widget_show:" + k, label, "", widget.shown(k))
+                                    for k, label, _ in widget.SHOW]},
+        {"title": "Privacy", "items": [
+            T("widget_private", "Hide names on the widget",
+              "Shows “Meeting at 15:00” and “3 tasks open” instead of titles. "
+              "The lock screen is visible to anyone at your desk.", widget.private()),
+        ]},
+        {"title": "Add it", "items": [
+            I("Lock screen: Windows Settings > Personalization > Lock screen > Widgets", dim=False),
+            I("Widget board: Win+W, then + and pick Tavinor", dim=False),
+            I("Needs the Tavinor package from the Microsoft Store or the .msix download. "
+              "The Setup.exe version has no widget."),
+        ]},
+    ], "footer": status}
 
 
 def page_general():
@@ -487,7 +522,7 @@ def page_features():
     ]}
 
 
-PAGES = {"main": page_main, "brain": page_brain, "general": page_general, "commands": page_commands, "display": page_display,
+PAGES = {"main": page_main, "brain": page_brain, "general": page_general, "commands": page_commands, "widget": page_widget, "display": page_display,
          "personality": page_personality, "sites": page_sites,
          "voice": page_voice, "access": page_access, "activity": page_activity,
          "calendar": page_calendar, "notes": page_notes, "features": page_features}
@@ -524,6 +559,33 @@ def act(bar, pg, rid, value):
     if rid == "embed":
         tavinor.set_setting("embed", "ollama" if value else "provider")
         return {"reload": True}
+    if rid == "widget_place":
+        import weather
+        import widget
+        if not str(value).strip():
+            tavinor.set_setting("widget_place", None)
+            widget.refresh()
+            return {"reload": True}
+        place = weather.find(str(value))
+        if not place:
+            return {"note": "couldn't find %s" % str(value)[:40], "ok": False}
+        tavinor.set_setting("widget_place", place)
+        widget.refresh()
+        return {"reload": True}
+    if rid == "widget_units":
+        import widget
+        if value not in ("c", "f"):
+            raise ValueError("unknown units")
+        tavinor.set_setting("widget_units", value)
+        widget.refresh()
+        return {}
+    if rid.startswith("widget_show:") or rid == "widget_private":
+        import widget
+        if rid != "widget_private" and rid[12:] not in {k for k, _, _ in widget.SHOW}:
+            raise ValueError("unknown widget item")
+        tavinor.set_setting(rid, bool(value))
+        widget.refresh()
+        return {}
     if rid in ("notch_screen", "notch_side"):
         import bridge
         ok = ({"mouse", "primary"} | {d["id"] for d in bridge.DISPLAYS}) if rid == "notch_screen"             else dict(SIDES)

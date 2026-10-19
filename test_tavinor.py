@@ -1726,6 +1726,59 @@ def check_mcp():
     print("mcp: %d checks passed" % n)
 
 
+def check_widget():
+    """The Windows widget's snapshot: privacy, the Show switches, settings."""
+    import json as _json
+    import bridge
+    import uisettings as u
+    import weather
+    import widget
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    saved = (tavinor.SETTINGS, widget.FILE, weather.get, weather.find, bridge.get_day)
+    tavinor.SETTINGS, widget.FILE = tmp / "s.json", tmp / "widget.json"
+    noida = {"name": "Noida", "region": "Uttar Pradesh", "country": "India", "lat": 28.58, "lon": 77.33}
+    weather.find = lambda name: noida if name.lower() == "noida" else None
+    weather.get = lambda place, units="c": {"place": place["name"], "temp": 27 if units == "c" else 80,
+        "feels": 29, "humidity": 59, "wind": 5, "wind_unit": "km/h", "aqi": 191, "aqi_label": "Unhealthy",
+        "sunrise": "06:23", "sunset": "17:47", "summary": "Clear"}
+    bridge.get_day = lambda: _json.dumps({"date": "2026-10-19", "focus": {"task": "write spec", "minutes_left": 12},
+        "habits": [], "tasks": [{"n": 1, "text": "call the bank", "subtask": False},
+                                {"n": 2, "text": "a step", "subtask": True}],
+        "calendar": [{"title": "Standup", "start": "2026-10-19T15:00:00", "end": "", "all_day": False}]})
+    n = 0
+    try:
+        now = __import__("datetime").datetime(2026, 10, 19, 9, 0)
+        s = widget.snapshot(now)
+        assert "Settings > Widget" in s["weather"]["error"]; n += 1          # no city yet
+        assert s["private"] and s["meeting"] == {"time": "15:00", "title": ""}; n += 1
+        assert s["tasks"] == {"open": 1, "top": []} and s["focus"]["task"] == ""; n += 1
+        assert u.act(None, "widget", "widget_place", "atlantis")["ok"] is False; n += 1
+        u.act(None, "widget", "widget_place", "Noida")
+        assert tavinor.setting("widget_place") == noida; n += 1
+        s = widget.snapshot(now)
+        assert s["weather"]["temp"] == 27 and "sunrise" not in s["weather"]; n += 1   # sun off by default
+        u.act(None, "widget", "widget_units", "f")
+        u.act(None, "widget", "widget_show:air", False)
+        u.act(None, "widget", "widget_private", False)
+        s = widget.snapshot(now)
+        assert s["weather"]["temp"] == 80 and "aqi" not in s["weather"]; n += 1
+        assert s["meeting"]["title"] == "Standup" and s["tasks"]["top"] == ["call the bank"]; n += 1
+        assert "meeting" not in widget.snapshot(__import__("datetime").datetime(2026, 10, 19, 16, 0)); n += 1
+        for bad in (("widget_units", "k"), ("widget_show:passwords", True)):
+            try:
+                u.act(None, "widget", *bad)
+                raise AssertionError("accepted %r" % (bad,))
+            except ValueError:
+                pass
+        n += 1
+        widget.write()
+        assert _json.loads(widget.FILE.read_text(encoding="utf-8"))["weather"]["place"] == "Noida"; n += 1
+        assert u.page("widget")["title"] == "Widget"; n += 1
+    finally:
+        tavinor.SETTINGS, widget.FILE, weather.get, weather.find, bridge.get_day = saved
+    print("widget: %d checks passed" % n)
+
+
 def check_dizzy():
     """Circles make Tavinor dizzy; shaking, drags and reading don't
     (the self-check inside ui/dizzy.js, run with Node if it's installed)."""
@@ -1828,6 +1881,7 @@ def check_focus_link():
 
 
 if __name__ == "__main__":
+    check_widget()
     check_dizzy()
     check_local_models()
     check_piper()

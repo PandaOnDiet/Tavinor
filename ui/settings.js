@@ -56,6 +56,7 @@ const ICONS = {
   calendar: ['M5 6.5h14v13H5zM5 10.5h14M9 4v4M15 4v4', '#4c8dff'],
   chart: ['M4.5 19.5h15M7 16v-4M11.5 16V8M16 16v-6', '#46d28c'],
   sliders: ['M5 8h9M18 8h1M5 16h3M12 16h7M14 6v4M8 14v4', '#9aa3b5'],
+  display: ['M4 5h16v11H4zM9 20h6M12 16v4', '#3fd2c7'],
 };
 
 function icon(name) {

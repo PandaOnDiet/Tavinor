@@ -38,12 +38,12 @@ function call(tool, args = {}, timeout = 30000) {
 }
 
 let win, sets = null, chats = null;
-let side = 'center';
+let side = 'center', where = 'primary', onDisplay = null, isOpen = false;
 
 // Settings: its own glass window beside the notch, movable by its header.
 async function openSettings() {
   if (sets && !sets.isDestroyed()) { sets.show(); sets.focus(); return; }
-  const wa = screen.getPrimaryDisplay().workArea;
+  const wa = here().workArea;
   const nb = win.getBounds();
   const h = Math.min(860, wa.height - 24);
   const x = Math.min(nb.x + nb.width + 8, wa.x + wa.width - 480);
@@ -67,7 +67,7 @@ async function openSettings() {
 // Chat: the same kind of glass window, taller. `first` is sent once it loads.
 function openChat(first) {
   if (chats && !chats.isDestroyed()) { chats.show(); chats.focus(); return; }
-  const wa = screen.getPrimaryDisplay().workArea;
+  const wa = here().workArea;
   const nb = win.getBounds();
   const x = Math.min(nb.x + nb.width + 8, wa.x + wa.width - 540);
   chats = new BrowserWindow({
@@ -89,8 +89,28 @@ function openChat(first) {
   c.on('closed', () => { if (chats === c) chats = null; });
 }
 
+// Settings > Display: a chosen screen, the main one, or the pointer's.
+function targetDisplay() {
+  if (where === 'mouse') return screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  return screen.getAllDisplays().find((d) => String(d.id) === where) || screen.getPrimaryDisplay();
+}
+
+function here() { return screen.getDisplayMatching(win.getBounds()); }
+
+function reportDisplays() {
+  const p = screen.getPrimaryDisplay().id;
+  const list = screen.getAllDisplays().map((d, i) => ({
+    id: String(d.id),
+    label: (d.label || 'Screen ' + (i + 1)) + (d.id === p ? ' (main)' : ''),
+    size: d.size.width + ' × ' + d.size.height,
+  }));
+  call('displays', { list }).catch(() => {});
+}
+
 function place() {
-  const d = screen.getPrimaryDisplay().bounds;
+  const dd = targetDisplay();
+  onDisplay = dd.id;
+  const d = dd.bounds;
   const x = side === 'left' ? d.x + 40
           : side === 'right' ? d.x + d.width - W - 40
           : d.x + Math.round((d.width - W) / 2);
@@ -109,6 +129,7 @@ async function pump(after) {
       const open = [win, sets, chats].filter((w) => w && !w.isDestroyed());
       if (evs.length) for (const w of open) w.webContents.send('events', evs);
       // An open chat sends `first` itself (it got the event); a new one by query.
+      for (const e of evs) if (e.kind === 'place' && e.data) { where = e.data.screen; side = e.data.side; place(); }
       for (const e of evs) if (e.kind === 'chat_open') openChat(open.includes(chats) ? '' : e.data && e.data.first);
     } catch (e) {
       if (++misses >= 4) return app.quit();
@@ -135,7 +156,7 @@ function looking(on) {
 // glass blurs a picture of the screen under the notch, taken as it opens.
 // Kept in memory only.
 async function backdrop(target = win) {
-  const d = screen.getPrimaryDisplay();
+  const d = screen.getDisplayMatching(target.getBounds());
   const sf = d.scaleFactor;
   const src = await desktopCapturer.getSources({
     types: ['screen'],
@@ -155,6 +176,7 @@ app.whenReady().then(async () => {
   let hello = { last: 0, face: 'idle', name: 'Tavinor', side: 'center' };
   try { hello = await call('hello'); } catch (e) { /* Python still starting */ }
   side = hello.side || 'center';
+  where = hello.screen || 'primary';
 
   win = new BrowserWindow({
     width: W, height: H, frame: false, transparent: true, resizable: false,
@@ -166,7 +188,14 @@ app.whenReady().then(async () => {
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setIgnoreMouseEvents(true, { forward: true });
   place();
+  reportDisplays();
   screen.on('display-metrics-changed', place);
+  for (const ev of ['display-added', 'display-removed']) screen.on(ev, () => { reportDisplays(); place(); });
+  // Follow the mouse: hop screens only while closed, so it never jumps mid-use.
+  setInterval(() => {
+    if (where !== 'mouse' || isOpen || !win || win.isDestroyed()) return;
+    if (screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id !== onDisplay) place();
+  }, 400);
   win.loadFile('index.html');
   win.once('ready-to-show', () => {
     win.showInactive();
@@ -177,6 +206,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('backdrop', () => backdrop().catch(() => null));
   ipcMain.on('interactive', (_e, on) => win.setIgnoreMouseEvents(!on, { forward: true }));
   ipcMain.on('open', (_e, on) => {
+    isOpen = on;
     looking(on);
     if (!on) win.blur();
   });

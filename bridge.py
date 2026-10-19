@@ -114,6 +114,7 @@ def call(tool, args, approve, face=None):
 # must not be able to use it - that would skip the Do it / Cancel approval.
 UI_TOKEN = secrets.token_urlsafe(24)
 _EV, _EV_N, _FACE = [], 0, "idle"
+DISPLAYS = []                # [{"id", "label", "size"}], reported by Electron
 _EV_COND = threading.Condition()
 
 
@@ -245,6 +246,7 @@ def ui_call(bar, tool, args):
             import uisettings
             return {"last": _EV_N, "face": _FACE, "name": soul.name(),
                     "side": cane.setting("notch_side", "center"),
+                    "screen": cane.setting("notch_screen", "primary"),
                     "config": uisettings.ui_config()}
     if tool == "events":
         return events(int(args.get("after", 0)), float(args.get("wait", 20)))
@@ -262,6 +264,12 @@ def ui_call(bar, tool, args):
         return {"ok": True}
     if tool == "day":
         return ui_day()
+    if tool == "displays":
+        global DISPLAYS
+        DISPLAYS = [{"id": str(d.get("id", ""))[:40], "label": str(d.get("label", ""))[:60],
+                     "size": str(d.get("size", ""))[:40]}
+                    for d in (args.get("list") or [])[:8] if isinstance(d, dict)]
+        return {"ok": True}
     if tool == "speak":                       # the speaker buttons: always, on demand
         import voice
         if args.get("stop"):

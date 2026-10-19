@@ -81,6 +81,7 @@ def page_main():
             N("voice", "Voice", "Whisper" if voice.engine() == "whisper" else "Windows", "mic"),
             N("calendar", "Calendar", "Connected" if gcal.signed_in() else "Not connected", "calendar"),
             N("activity", "Activity", "On" if activity.on() else "Off", "chart"),
+            N("display", "Display", display_value(), "display"),
             N("general", "General", "", "sliders"),
         ]},
     ]}
@@ -115,6 +116,35 @@ def page_brain():
               notes.source() == "ollama"),
         ]},
     ]}
+
+
+SIDES = [("left", "Left"), ("center", "Center"), ("right", "Right")]
+
+
+def display_value():
+    import bridge
+    where = cane.setting("notch_screen", "primary")
+    name = ("Follows the mouse" if where == "mouse" else "Main screen" if where == "primary"
+            else next((d["label"] for d in bridge.DISPLAYS if d["id"] == where), "Main screen"))
+    return "%s · %s" % (name, dict(SIDES).get(cane.setting("notch_side", "center"), "Center"))
+
+
+def page_display():
+    """Which screen the notch lives on, and where along its top edge.
+    The screens come from Electron, which reports them as it starts."""
+    import bridge
+    screens = [{"value": "mouse", "label": "Follow the mouse",
+                "desc": "Moves to whichever screen the pointer is on, while closed"},
+               {"value": "primary", "label": "Main screen", "desc": "The one Windows calls main"}]
+    screens += [{"value": d["id"], "label": d["label"], "desc": d["size"]} for d in bridge.DISPLAYS]
+    return {"title": "Display", "sections": [
+        {"title": "Screen", "items": [
+            {"type": "radio", "id": "notch_screen", "value": cane.setting("notch_screen", "primary"),
+             "options": screens}]},
+        {"title": "Position", "items": [
+            {"type": "radio", "id": "notch_side", "value": cane.setting("notch_side", "center"),
+             "options": [{"value": k, "label": v} for k, v in SIDES]}]},
+    ], "footer": "Moves straight away"}
 
 
 def page_general():
@@ -299,7 +329,7 @@ def page_features():
     ]}
 
 
-PAGES = {"main": page_main, "brain": page_brain, "general": page_general,
+PAGES = {"main": page_main, "brain": page_brain, "general": page_general, "display": page_display,
          "personality": page_personality, "sites": page_sites,
          "voice": page_voice, "access": page_access, "activity": page_activity,
          "calendar": page_calendar, "notes": page_notes, "features": page_features}
@@ -336,6 +366,14 @@ def act(bar, pg, rid, value):
     if rid == "embed":
         cane.set_setting("embed", "ollama" if value else "provider")
         return {"reload": True}
+    if rid in ("notch_screen", "notch_side"):
+        import bridge
+        ok = ({"mouse", "primary"} | {d["id"] for d in bridge.DISPLAYS}) if rid == "notch_screen"             else dict(SIDES)
+        if str(value) not in ok:
+            raise ValueError("unknown choice")
+        cane.set_setting(rid, str(value))
+        bridge.publish("place", place())
+        return {}
     if rid == "chat":
         bar.root.after(0, lambda: __import__("agent").open_window(bar))
         return {}
@@ -468,6 +506,11 @@ def _test_answers():
         tasks_ok = False
     return ("answers ✓ · tasks %s  (%.1f s)" % (
         "✓" if tasks_ok else "✗ - pick another model for the chat", time.time() - t0), tasks_ok)
+
+
+def place():
+    return {"screen": cane.setting("notch_screen", "primary"),
+            "side": cane.setting("notch_side", "center")}
 
 
 def ui_config():

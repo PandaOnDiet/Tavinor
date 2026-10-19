@@ -127,9 +127,6 @@ each mood switches cells on (`PIX` in `ui/app.js`), following `brand/faces/`.
 Without the tray files Tavinor falls back to `tavinor.ico`, then to the stock
 Windows icon.
 
-`make_icon.py` drew the old chevron icon and now writes over the logo: don't
-run it.
-
 ## What it handles
 
 | You type | What happens |

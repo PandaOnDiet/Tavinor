@@ -2,10 +2,13 @@
 
 Tavinor writes widget.json in its data folder every few minutes and after
 any widget setting changes; the widget provider (widget/, C#) only reads
-it. No port, no token: the widget can show, never act.
+it. Its buttons come back through act(), over the bridge with the widget's
+own token (bridge.WIDGET_TOKEN): add a task, tick one off, start or stop
+focus, set the city. Nothing else.
 
     write()     # build the snapshot and write it now
     loop()      # every 5 minutes, in a thread
+    act(tool, args)   # a widget button
 """
 import json
 import os
@@ -67,10 +70,15 @@ def snapshot(now=None):
             out["meeting"] = {"time": e["start"][11:16], "title": "" if hide else e["title"]}
     if shown("tasks"):
         top = [t["text"] for t in day["tasks"] if not t["subtask"]]
-        out["tasks"] = {"open": len(top), "top": [] if hide else top[:3]}
+        # `list` is the large size's to-do list: names always, because the
+        # lock screen doesn't show the large size; `top` follows Hide names.
+        out["tasks"] = {"open": len(top), "top": [] if hide else top[:3],
+                        "list": [{"key": i["created"], "text": i["text"]}
+                                 for i in tavinor.open_items() if not i.get("parent")][:6]}
     if shown("focus") and day.get("focus"):
         f = day["focus"]
-        out["focus"] = {"minutes_left": f["minutes_left"], "task": "" if hide else f["task"]}
+        out["focus"] = {"minutes_left": f["minutes_left"], "ends": f.get("ends", ""),
+                        "task": "" if hide else f["task"]}
     if shown("habits") and day.get("habits"):
         hs = day["habits"]
         out["habits"] = {"done": sum(h["done_today"] for h in hs), "of": len(hs)}
@@ -83,6 +91,38 @@ def write():
     tmp = FILE.with_suffix(".tmp")
     tmp.write_text(data, encoding="utf-8")
     os.replace(tmp, FILE)
+
+
+def act(tool, args):
+    """A widget button. {"ok": True} or {"ok": False, "error": shown on the card}."""
+    import bridge
+    if tool == "add":
+        text = str(args.get("text", "")).strip()[:200]
+        if not text:
+            return {"ok": False, "error": "Type a task first"}
+        out = bridge.run("add_task", {"text": text})
+    elif tool == "done":
+        out = bridge.mark_done_key(str(args.get("key", "")))
+        if out is None:
+            return {"ok": False, "error": "That task is already done"}
+    elif tool == "focus":
+        minutes = int(args.get("minutes", 25))
+        if not 1 <= minutes <= 480:
+            return {"ok": False, "error": "Focus is 1 to 480 minutes"}
+        out = bridge.run("start_focus", {"minutes": minutes})
+    elif tool == "stop":
+        import focus
+        out = focus.stop() and "stopped"
+    elif tool == "place":
+        import uisettings
+        r = uisettings.act(None, "widget", "widget_place", str(args.get("value", ""))[:80])
+        if r.get("ok") is False:
+            return {"ok": False, "error": r["note"].capitalize()}
+        out = "city set"
+    else:
+        return {"ok": False, "error": "Unknown widget action"}
+    refresh()
+    return {"ok": True, "text": str(out or "")}
 
 
 def refresh():

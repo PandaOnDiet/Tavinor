@@ -9,9 +9,10 @@ namespace TavinorWidget
     {
     // The card's data: plain strings, empty when there's nothing to show,
     // so the template only has to hide empty lines.
-    public static string Build(string? json)
+    // `now`: for the focus countdown; `status`: the last button's error, if any.
+    public static string Build(string? json, DateTime? now = null, string status = "")
     {
-        var d = new JsonObject();
+        var d = new JsonObject { ["status"] = status };
         JsonNode? s;
         try { s = json == null ? null : JsonNode.Parse(json); }
         catch (Exception) { s = null; }
@@ -51,10 +52,31 @@ namespace TavinorWidget
             d["tasks"] = open == 0 ? "No open tasks" : open == 1 ? "1 task open" : $"{open} tasks open";
             var top = t["top"]?.AsArray().Select(x => "• " + x).ToArray() ?? Array.Empty<string>();
             d["taskList"] = string.Join("\n", top);
+            // The large size's to-do list, one row and a ✓ per task.
+            var todo = new JsonArray();
+            foreach (var x in t["list"]?.AsArray() ?? new JsonArray())
+                todo.Add(new JsonObject { ["key"] = Str(x, "key"), ["text"] = Str(x, "text") });
+            d["todo"] = todo;
+            d["todoAny"] = todo.Count > 0 ? "1" : "";
         }
         var f = s["focus"];
         if (f != null)
-            d["focus"] = $"Focus · {Str(f, "minutes_left")} min left" + (Str(f, "task") == "" ? "" : " · " + Str(f, "task"));
+        {
+            // Counted down from `ends` each minute; widget.json is only rewritten every 5.
+            var left = Str(f, "minutes_left");
+            bool over = false;
+            if (DateTime.TryParse(Str(f, "ends"), out var ends))
+            {
+                var mins = Math.Ceiling((ends - (now ?? DateTime.Now)).TotalMinutes);
+                over = mins <= 0;
+                left = mins.ToString("0");
+            }
+            if (!over)
+            {
+                d["focus"] = $"Focus · {left} min left" + (Str(f, "task") == "" ? "" : " · " + Str(f, "task"));
+                d["focusOn"] = "1";
+            }
+        }
         var h = s["habits"];
         if (h != null) d["habits"] = $"Habits · {Str(h, "done")} of {Str(h, "of")} today";
         d["updated"] = "Tavinor · " + Str(s, "date") + " · " + Str(s, "updated");
@@ -64,9 +86,19 @@ namespace TavinorWidget
     static string Finish(JsonObject d)
     {
         foreach (var k in new[] { "icon", "temp", "summary", "short", "range", "detail", "air", "sun", "meeting", "meetingShort",
-                                  "tasks", "taskList", "focus", "habits", "note", "updated" })
+                                  "tasks", "taskList", "todoAny", "focus", "focusOn", "habits", "note", "status", "updated" })
             d[k] ??= "";
+        d["todo"] ??= new JsonArray();
         return d.ToJsonString();
+    }
+
+    // The Customize screen: the city now, and why the last one didn't save.
+    public static string Customize(string? json, string status = "")
+    {
+        string city = "";
+        try { city = JsonNode.Parse(json ?? "")?["weather"]?["place"]?.ToString() ?? ""; }
+        catch (Exception) { }
+        return new JsonObject { ["city"] = city, ["status"] = status }.ToJsonString();
     }
     }
 }

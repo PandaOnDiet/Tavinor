@@ -1,0 +1,15 @@
+{
+  "type": "AdaptiveCard",
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.5",
+  "body": [
+    { "type": "TextBlock", "text": "City for the weather", "weight": "Bolder" },
+    { "type": "Input.Text", "id": "city", "placeholder": "e.g. Noida", "value": "${city}", "maxLength": 80 },
+    { "type": "TextBlock", "text": "Same as Tavinor: Settings > Widget. Leave empty to hide the weather.", "isSubtle": true, "size": "Small", "wrap": true },
+    { "type": "TextBlock", "text": "${status}", "$when": "${status != ''}", "color": "Attention", "size": "Small", "wrap": true }
+  ],
+  "actions": [
+    { "type": "Action.Execute", "title": "Save", "verb": "savePlace" },
+    { "type": "Action.Execute", "title": "Cancel", "verb": "cancel" }
+  ]
+}

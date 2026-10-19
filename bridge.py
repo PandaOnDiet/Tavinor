@@ -38,7 +38,7 @@ def get_day():
            "focus": None, "habits": [], "calendar": None}
     f = focus.current()
     if f:
-        out["focus"] = {"task": f["task"], "minutes_left": round(f["left"])}
+        out["focus"] = {"task": f["task"], "minutes_left": round(f["left"]), "ends": f["ends"]}
     for h in tasks.load_habits():
         if not h["archived"]:
             out["habits"].append({"name": h["name"], "done_today": today in h["checkins"],
@@ -113,6 +113,10 @@ def call(tool, args, approve, face=None):
 # run any command (it is the bar), so an agent holding bridge.json's token
 # must not be able to use it - that would skip the Do it / Cancel approval.
 UI_TOKEN = secrets.token_urlsafe(24)
+# The Windows widget's buttons: you pressing them, so no Do it / Cancel, but
+# only widget.act()'s five actions. Its own token, in widget-link.json (the
+# provider is started by Windows, not by us, so it can't get it any other way).
+WIDGET_TOKEN = secrets.token_urlsafe(24)
 _EV, _EV_N, _FACE = [], 0, "idle"
 DISPLAYS = []                # [{"id", "label", "size"}], reported by Electron
 _EV_COND = threading.Condition()
@@ -319,6 +323,14 @@ def serve(approve, face=None, ui=None):
                 except Exception as e:
                     out = {"ok": False, "error": str(e)}
                 return self._reply(json.dumps(out).encode())
+            if self.headers.get("X-Tavinor-Widget") == WIDGET_TOKEN:
+                try:
+                    import widget
+                    req = json.loads(body or b"{}")
+                    out = widget.act(str(req.get("tool")), req.get("args") or {})
+                except Exception as e:
+                    out = {"ok": False, "error": str(e)}
+                return self._reply(json.dumps(out).encode())
             if self.headers.get("X-Cane-Token") != token:
                 self.send_response(403)
                 self.end_headers()
@@ -345,6 +357,8 @@ def serve(approve, face=None, ui=None):
                                 "pid": os.getpid(),
                                 "started": datetime.now().isoformat(timespec="seconds")}),
                     encoding="utf-8")
+    FILE.with_name("widget-link.json").write_text(
+        json.dumps({"port": srv.server_port, "token": WIDGET_TOKEN, "pid": os.getpid()}), encoding="utf-8")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 

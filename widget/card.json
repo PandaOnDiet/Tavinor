@@ -19,15 +19,52 @@
     },
     { "type": "TextBlock", "text": "${note}", "$when": "${note != ''}", "wrap": true, "isSubtle": true },
     { "type": "TextBlock", "text": "${range}", "$when": "${temp != '' && $host.widgetSize != 'small'}", "spacing": "Small", "wrap": true },
-    { "type": "TextBlock", "text": "${detail}", "$when": "${detail != '' && $host.widgetSize != 'small'}", "isSubtle": true, "spacing": "None", "wrap": true },
-    { "type": "TextBlock", "text": "${air}", "$when": "${air != '' && $host.widgetSize != 'small'}", "isSubtle": true, "spacing": "None", "wrap": true },
-    { "type": "TextBlock", "text": "${sun}", "$when": "${sun != '' && $host.widgetSize != 'small'}", "isSubtle": true, "spacing": "None", "wrap": true },
+    { "type": "TextBlock", "text": "${detail}", "$when": "${detail != '' && $host.widgetSize == 'large'}", "isSubtle": true, "spacing": "None", "wrap": true },
+    { "type": "TextBlock", "text": "${air}", "$when": "${air != '' && $host.widgetSize == 'large'}", "isSubtle": true, "spacing": "None", "wrap": true },
+    { "type": "TextBlock", "text": "${sun}", "$when": "${sun != '' && $host.widgetSize == 'large'}", "isSubtle": true, "spacing": "None", "wrap": true },
     { "type": "TextBlock", "text": "${meeting}", "$when": "${meeting != '' && $host.widgetSize != 'small'}", "weight": "Bolder", "spacing": "Medium", "wrap": true, "maxLines": 1 },
     { "type": "TextBlock", "text": "${meetingShort}", "$when": "${meetingShort != '' && $host.widgetSize == 'small'}", "weight": "Bolder", "spacing": "Medium" },
     { "type": "TextBlock", "text": "${focus}", "$when": "${focus != ''}", "spacing": "Small", "wrap": true, "maxLines": 1 },
     { "type": "TextBlock", "text": "${tasks}", "$when": "${tasks != '' && (meeting == '' || $host.widgetSize != 'small')}", "spacing": "Small", "wrap": true },
-    { "type": "TextBlock", "text": "${taskList}", "$when": "${taskList != '' && $host.widgetSize != 'small'}", "isSubtle": true, "spacing": "None", "wrap": true, "maxLines": 3 },
-    { "type": "TextBlock", "text": "${habits}", "$when": "${habits != '' && $host.widgetSize != 'small'}", "spacing": "Small", "wrap": true },
-    { "type": "TextBlock", "text": "${updated}", "$when": "${$host.widgetSize != 'small'}", "size": "Small", "isSubtle": true, "spacing": "Medium" }
+    { "type": "TextBlock", "text": "${taskList}", "$when": "${taskList != '' && $host.widgetSize == 'medium'}", "isSubtle": true, "spacing": "None", "wrap": true, "maxLines": 2 },
+    {
+      "type": "Container",
+      "$when": "${todoAny != '' && $host.widgetSize == 'large'}",
+      "spacing": "Small",
+      "items": [
+        {
+          "type": "ColumnSet",
+          "$data": "${todo}",
+          "spacing": "None",
+          "columns": [
+            { "type": "Column", "width": "stretch", "verticalContentAlignment": "Center",
+              "items": [ { "type": "TextBlock", "text": "${text}", "wrap": false, "maxLines": 1 } ] },
+            { "type": "Column", "width": "auto", "verticalContentAlignment": "Center",
+              "items": [ { "type": "ActionSet", "actions": [
+                { "type": "Action.Execute", "title": "✓", "tooltip": "Mark done", "verb": "done", "data": { "key": "${key}" } } ] } ] }
+          ]
+        }
+      ]
+    },
+    { "type": "TextBlock", "text": "${habits}", "$when": "${habits != '' && $host.widgetSize == 'large'}", "spacing": "Small", "wrap": true },
+    {
+      "type": "ColumnSet",
+      "$when": "${$host.widgetSize != 'small'}",
+      "spacing": "Medium",
+      "columns": [
+        { "type": "Column", "width": "stretch", "verticalContentAlignment": "Center",
+          "items": [ { "type": "Input.Text", "id": "text", "placeholder": "Add a task", "maxLength": 200 } ] },
+        { "type": "Column", "width": "auto", "verticalContentAlignment": "Center",
+          "items": [ { "type": "ActionSet", "actions": [ { "type": "Action.Execute", "title": "Add", "verb": "add" } ] } ] }
+      ]
+    },
+    { "type": "ActionSet", "$when": "${focusOn == '' && $host.widgetSize != 'small'}", "spacing": "Small",
+      "actions": [
+        { "type": "Action.Execute", "title": "Focus 25 min", "verb": "focus", "data": { "minutes": 25 } },
+        { "type": "Action.Execute", "title": "Focus 50 min", "verb": "focus", "data": { "minutes": 50 } } ] },
+    { "type": "ActionSet", "$when": "${focusOn != '' && $host.widgetSize != 'small'}", "spacing": "Small",
+      "actions": [ { "type": "Action.Execute", "title": "Stop focus", "verb": "stop" } ] },
+    { "type": "TextBlock", "text": "${status}", "$when": "${status != ''}", "color": "Attention", "size": "Small", "spacing": "Small", "wrap": true },
+    { "type": "TextBlock", "text": "${updated}", "$when": "${$host.widgetSize == 'large'}", "size": "Small", "isSubtle": true, "spacing": "Medium" }
   ]
 }

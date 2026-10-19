@@ -1727,15 +1727,21 @@ def check_mcp():
 
 
 def check_widget():
-    """The Windows widget's snapshot: privacy, the Show switches, settings."""
+    """The Windows widget's snapshot: privacy, the Show switches, settings,
+    and its buttons (widget.act over the bridge with the widget token)."""
     import json as _json
+    import urllib.error
+    import urllib.request
     import bridge
     import uisettings as u
     import weather
     import widget
     tmp = pathlib.Path(tempfile.mkdtemp())
-    saved = (tavinor.SETTINGS, widget.FILE, weather.get, weather.find, bridge.get_day)
+    saved = (tavinor.SETTINGS, widget.FILE, weather.get, weather.find, bridge.get_day,
+             tavinor.open_items, bridge.run, bridge.mark_done_key, bridge.FILE)
     tavinor.SETTINGS, widget.FILE = tmp / "s.json", tmp / "widget.json"
+    tavinor.open_items = lambda: [{"text": "call the bank", "created": "2026-10-19T08:00"},
+                                  {"text": "a step", "created": "2026-10-19T08:01", "parent": "x"}]
     noida = {"name": "Noida", "region": "Uttar Pradesh", "country": "India", "lat": 28.58, "lon": 77.33}
     weather.find = lambda name: noida if name.lower() == "noida" else None
     weather.get = lambda place, units="c": {"place": place["name"], "temp": 27 if units == "c" else 80,
@@ -1751,7 +1757,9 @@ def check_widget():
         s = widget.snapshot(now)
         assert "Settings > Widget" in s["weather"]["error"]; n += 1          # no city yet
         assert s["private"] and s["meeting"] == {"time": "15:00", "title": ""}; n += 1
-        assert s["tasks"] == {"open": 1, "top": []} and s["focus"]["task"] == ""; n += 1
+        assert s["tasks"]["open"] == 1 and s["tasks"]["top"] == [] and s["focus"]["task"] == ""; n += 1
+        # the large size's to-do list keeps names (lock screen never shows large), no subtasks
+        assert s["tasks"]["list"] == [{"key": "2026-10-19T08:00", "text": "call the bank"}]; n += 1
         assert u.act(None, "widget", "widget_place", "atlantis")["ok"] is False; n += 1
         u.act(None, "widget", "widget_place", "Noida")
         assert tavinor.setting("widget_place") == noida; n += 1
@@ -1774,8 +1782,44 @@ def check_widget():
         widget.write()
         assert _json.loads(widget.FILE.read_text(encoding="utf-8"))["weather"]["place"] == "Noida"; n += 1
         assert u.page("widget")["title"] == "Widget"; n += 1
+
+        # The widget's buttons: five actions, checked input, nothing else.
+        ran = []
+        bridge.run = lambda tool, args: ran.append((tool, args)) or "ok"
+        bridge.mark_done_key = lambda key: "call the bank" if key == "2026-10-19T08:00" else None
+        assert widget.act("add", {"text": "  buy milk "})["ok"] and ran[-1] == ("add_task", {"text": "buy milk"}); n += 1
+        assert widget.act("add", {"text": "   "}) == {"ok": False, "error": "Type a task first"}; n += 1
+        assert widget.act("done", {"key": "2026-10-19T08:00"})["ok"]; n += 1
+        assert widget.act("done", {"key": "gone"})["ok"] is False; n += 1
+        assert widget.act("focus", {"minutes": 50})["ok"] and ran[-1] == ("start_focus", {"minutes": 50}); n += 1
+        assert widget.act("focus", {"minutes": 9999})["ok"] is False and len(ran) == 2; n += 1
+        assert widget.act("place", {"value": "atlantis"})["error"].startswith("Couldn't find"); n += 1
+        assert widget.act("place", {"value": "Noida"})["ok"]; n += 1
+        assert widget.act("delete_everything", {})["ok"] is False and len(ran) == 2; n += 1
+
+        # Over HTTP: the widget token reaches act(); the agent token doesn't skip
+        # approval through it, and a guess is refused.
+        bridge.FILE = tmp / "bridge.json"
+        srv = bridge.serve(lambda l: False)
+        link = _json.loads((tmp / "widget-link.json").read_text())
+        try:
+            def post(headers, tool="add"):
+                req = urllib.request.Request("http://127.0.0.1:%d/" % link["port"],
+                    _json.dumps({"tool": tool, "args": {"text": "from widget"}}).encode(), headers)
+                try:
+                    with urllib.request.urlopen(req, timeout=5) as r:
+                        return r.status, _json.load(r)
+                except urllib.error.HTTPError as e:
+                    return e.code, None
+            assert post({"X-Tavinor-Widget": link["token"]}) == (200, {"ok": True, "text": "ok"}); n += 1
+            agent = _json.loads(bridge.FILE.read_text())["token"]
+            assert post({"X-Cane-Token": agent})[1]["ok"] is False and len(ran) == 3; n += 1
+            assert post({"X-Tavinor-Widget": "guess"})[0] == 403; n += 1
+        finally:
+            srv.shutdown()
     finally:
-        tavinor.SETTINGS, widget.FILE, weather.get, weather.find, bridge.get_day = saved
+        (tavinor.SETTINGS, widget.FILE, weather.get, weather.find, bridge.get_day,
+         tavinor.open_items, bridge.run, bridge.mark_done_key, bridge.FILE) = saved
     print("widget: %d checks passed" % n)
 
 

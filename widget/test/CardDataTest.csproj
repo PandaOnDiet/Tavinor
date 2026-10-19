@@ -9,5 +9,6 @@
   <ItemGroup>
     <Compile Include="..\CardData.cs" />
     <None Include="..\card.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\customize.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

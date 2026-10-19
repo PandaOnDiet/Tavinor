@@ -63,11 +63,12 @@
                 </Activation>
                 <Definitions>
                   <Definition Id="Tavinor_Today" DisplayName="Tavinor"
-                    Description="Weather, your next meeting, open tasks and the focus timer"
-                    AllowMultiple="false">
+                    Description="Weather, your next meeting, your to-do list and the focus timer"
+                    AllowMultiple="false" IsCustomizable="true">
                     <Capabilities>
                       <Capability><Size Name="small" /></Capability>
                       <Capability><Size Name="medium" /></Capability>
+                      <Capability><Size Name="large" /></Capability>
                     </Capabilities>
                     <ThemeResources>
                       <Icons>

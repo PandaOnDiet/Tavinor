@@ -2506,6 +2506,13 @@ class Bar:
     # -- settings
 
     def show_settings(self):
+        # Tray, "open settings" and the notch menu all land here. With the
+        # Electron notch running, Settings opens inside its card; the Tk
+        # window is only for when the notch isn't there.
+        if getattr(self, "electron", False):
+            import bridge
+            bridge.publish("settings_open")
+            return
         self.root.after(0, self._settings_window)
 
     def page_header(self, w, cv, title, close, back=None):

@@ -367,4 +367,7 @@ window.tav.on('events', (evs) => {
   }
 });
 
+// In the notch's pane (a frame) the card is the panel: no second border.
+if (window.parent !== window) document.documentElement.classList.add('embed');
+
 load('main');

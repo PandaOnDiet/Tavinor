@@ -102,6 +102,9 @@ input.addEventListener('input', fit);
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
+// In the notch's pane (a frame) the card is the panel: no second border.
+if (window.parent !== window) document.documentElement.classList.add('embed');
+
 $('close').addEventListener('click', () => window.tav.closeMe());
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.tav.closeMe(); });
 

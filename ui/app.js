@@ -4,6 +4,7 @@ const $ = (id) => document.getElementById(id);
 const w = $('w'), face = $('face'), eyes = $('eyes'), head = $('head');
 const q = $('q'), wave = $('wave'), mic = $('btn-mic');
 const today = $('today'), reply = $('reply');
+const pane = $('pane'), paneFrame = $('pane-frame');
 
 const GLOW = {
   idle: 'rgba(110,150,255,.18)', listening: 'rgba(76,141,255,.6)', thinking: 'rgba(160,120,255,.55)',
@@ -89,7 +90,7 @@ function paint(bd) {
 
 // ---------------------------------------------------------------- open/close
 function pinned() {
-  return document.activeElement === q || mode === 'listening' || mode === 'thinking';
+  return document.activeElement === q || mode === 'listening' || mode === 'thinking' || !pane.hidden;
 }
 
 async function openNow(focusInput) {
@@ -117,7 +118,7 @@ function close() {
   window.tav.opened(false);
   q.blur();
   setInteractive(false);
-  setTimeout(() => { if (!open) { reply.hidden = true; menu.hidden = true; today.hidden = false; gridIcon(false); } }, 400);
+  setTimeout(() => { if (!open) { reply.hidden = true; menu.hidden = true; pane.hidden = true; today.hidden = false; gridIcon(false); } }, 400);
   layoutToasts();
 }
 
@@ -130,7 +131,7 @@ function layoutToasts() {
   // Open: under whichever card shows.
   let top = 168;
   if (open) {
-    const card = !menu.hidden ? menu : reply.hidden ? today : reply;
+    const card = !pane.hidden ? pane : !menu.hidden ? menu : reply.hidden ? today : reply;
     top = card.offsetTop + card.offsetHeight + 12;
   }
   toastBox.style.top = top + 'px';
@@ -267,6 +268,7 @@ async function refreshDay() {
 function showToday() {
   reply.hidden = true;
   menu.hidden = true;
+  pane.hidden = true;
   gridIcon(false);
   today.hidden = false;
   refreshDay().then(layoutToasts);
@@ -280,6 +282,7 @@ function showReply(question, text) {
   $('reply-a').textContent = text || '…';
   today.hidden = true;
   menu.hidden = true;
+  pane.hidden = true;
   gridIcon(false);
   reply.hidden = false;
   layoutToasts();
@@ -308,7 +311,7 @@ $('btn-back').addEventListener('click', showToday);
 // already understands, sent the same way as typing it.
 const menu = $('menu');
 const MENU = [
-  ['Chat', 'M5 6.5A2.5 2.5 0 017.5 4h9A2.5 2.5 0 0119 6.5v6a2.5 2.5 0 01-2.5 2.5H11l-4 3.5V15a2.5 2.5 0 01-2-2.5z', () => { ask('chat'); close(); }],
+  ['Chat', 'M5 6.5A2.5 2.5 0 017.5 4h9A2.5 2.5 0 0119 6.5v6a2.5 2.5 0 01-2.5 2.5H11l-4 3.5V15a2.5 2.5 0 01-2-2.5z', () => showPane('chat.html')],
   ['Today', 'M4.5 11L12 4.5l7.5 6.5M6.5 9.5V19.5h11V9.5', () => showToday()],
   ['Tasks', 'M5 5h14v14H5zM8.5 12l2.5 2.5 4.5-5', () => ask('what is left')],
   ['Notes', 'M7 4h7l4 4v12H7zM14 4v4h4M10 12h5M10 16h5', () => ask('notes')],
@@ -317,7 +320,7 @@ const MENU = [
   ['Tomorrow', 'M5 6.5h14v13H5zM5 10.5h14M9 4v4M15 4v4M10 15h4', () => ask('calendar tomorrow')],
   ['Focus 25 min', 'M12 21a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM12 9.5v4l2.5 1.5M10 3h4', () => ask('start focus for 25 minutes')],
   ['Blocked sites', 'M12 20a8 8 0 100-16 8 8 0 000 16zM6.5 6.5l11 11', () => ask('blocked sites')],
-  ['Settings', 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z', () => { window.tav.openSettings(); close(); }],
+  ['Settings', 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z', () => showSettings()],
 ];
 for (const [label, d, go] of MENU) {
   const b = document.createElement('button');
@@ -334,8 +337,31 @@ function gridIcon(on) {
   $('btn-settings').setAttribute('aria-expanded', String(on));
 }
 
+// Settings and Chat open in one card under the pill, never a separate
+// window. Each load starts fresh: Settings on its first page, Chat with
+// its history (and the first message, when there is one).
+async function showPane(url) {
+  if (!open) await openNow(false);    // it ends on Today: let it finish first
+  today.hidden = true;
+  reply.hidden = true;
+  menu.hidden = true;
+  paneFrame.src = url;
+  pane.hidden = false;
+  gridIcon(true);
+  layoutToasts();
+  for (const x of pane.querySelectorAll('.bd')) paint(x);
+  window.tav.focus();                 // so its text boxes take typing
+}
+const showSettings = () => showPane('settings.html');
+const chatOpen = () => !pane.hidden && paneFrame.src.includes('chat.html');
+
+// The pane's close button and Escape (from inside the frame) come back here.
+window.addEventListener('message', (e) => {
+  if (e.source === paneFrame.contentWindow && e.data && e.data.tav === 'close-pane') showToday();
+});
+
 $('btn-settings').addEventListener('click', () => {
-  if (!menu.hidden) return showToday();
+  if (!menu.hidden || !pane.hidden) return showToday();
   today.hidden = true;
   reply.hidden = true;
   menu.hidden = false;
@@ -359,6 +385,9 @@ window.tav.on('events', (evs) => {
     else if (e.kind === 'answer') { asked = d.question || asked; showReply(asked, d.text); if (!open) openNow(false); }
     else if (e.kind === 'heard') { asked = d.text; showReply(d.text, ''); }
     else if (e.kind === 'open') openNow(true);
+    else if (e.kind === 'settings_open') showSettings();
+    // An open chat sends `first` itself (it got this event too).
+    else if (e.kind === 'chat_open' && !chatOpen()) showPane('chat.html?first=' + encodeURIComponent(d.first || ''));
     else if (e.kind === 'hide') close();
     else if (e.kind === 'config') config = d;
     else if (e.kind === 'toast') showToast(d);

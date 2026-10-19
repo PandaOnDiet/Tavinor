@@ -14,6 +14,10 @@ button, input, select, textarea { font-family: inherit; }
   filter: blur(26px) saturate(170%) brightness(.85); opacity: 0; transition: opacity .3s; }
 .has-bd .bd { opacity: 1; }
 
+/* Inside the notch's pane (Settings, Chat): the card is the glass already */
+.embed .panel { background: transparent; border: none; box-shadow: none; border-radius: 0; }
+.embed .panel::before, .embed .bd { display: none; }
+.embed .top { -webkit-app-region: no-drag; padding: 16px 14px 8px 20px; }
 .top { display: flex; align-items: center; gap: 8px; padding: 18px 18px 10px 22px; -webkit-app-region: drag; position: relative; z-index: 2; }
 .top h1 { flex: 1; margin: 0; font: 600 19px 'Segoe UI Variable Display', 'Segoe UI', sans-serif; }
 .icon { -webkit-app-region: no-drag; width: 34px; height: 34px; border-radius: 17px; border: none; background: rgba(255, 255, 255, .08);

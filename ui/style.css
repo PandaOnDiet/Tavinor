@@ -158,6 +158,9 @@ button { font-family: inherit; }
 #btn-settings .x { display: none; }
 #btn-settings.x-on { background: #fff; color: #11131a; }
 #btn-settings.x-on .x { display: block; } #btn-settings.x-on .g { display: none; }
+/* Settings and Chat live inside this card: fixed height, scrolling within */
+.pane { padding: 0; height: 600px; overflow: hidden; }
+.pane iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; border-radius: inherit; }
 .menu { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
 .mi { display: flex; align-items: center; gap: 14px; height: 46px; padding: 0 12px; border: none; border-radius: 14px;
   background: transparent; color: #f4f6fb; font: 500 15.5px 'Segoe UI Variable Text', 'Segoe UI', sans-serif; cursor: pointer; text-align: left; }

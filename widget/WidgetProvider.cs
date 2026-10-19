@@ -66,7 +66,7 @@ namespace TavinorWidget
                 {
                     "add" => Link.Send("add", new JsonObject { ["text"] = Arg("text") }),
                     "done" => Link.Send("done", new JsonObject { ["key"] = Arg("key") }),
-                    "focus" => Link.Send("focus", new JsonObject { ["minutes"] = int.TryParse(Arg("minutes"), out var m) ? m : 25 }),
+                    "focus" => Link.Send("focus", new JsonObject { ["minutes"] = Minutes(Arg("minutes")) }),
                     "stop" => Link.Send("stop", new JsonObject()),
                     "savePlace" => Link.Send("place", new JsonObject { ["value"] = Arg("city") }),
                     _ => null,                                  // "cancel", or a plain refresh
@@ -78,6 +78,16 @@ namespace TavinorWidget
                 }
                 Update(id);
             });
+        }
+
+        // The focus box: empty means 25; anything that isn't a number goes to
+        // Tavinor as 0, so the card says "1 to 480" instead of quietly using 25.
+        static int Minutes(string typed)
+        {
+            if (string.IsNullOrWhiteSpace(typed)) return 25;
+            return double.TryParse(typed, System.Globalization.NumberStyles.Float,
+                                   System.Globalization.CultureInfo.InvariantCulture, out var m)
+                   && m is >= 1 and <= 480 ? (int)Math.Round(m) : 0;
         }
 
         public void OnCustomizationRequested(WidgetCustomizationRequestedArgs args)

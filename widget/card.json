@@ -58,10 +58,17 @@
           "items": [ { "type": "ActionSet", "actions": [ { "type": "Action.Execute", "title": "Add", "verb": "add" } ] } ] }
       ]
     },
-    { "type": "ActionSet", "$when": "${focusOn == '' && $host.widgetSize != 'small'}", "spacing": "Small",
-      "actions": [
-        { "type": "Action.Execute", "title": "Focus 25 min", "verb": "focus", "data": { "minutes": 25 } },
-        { "type": "Action.Execute", "title": "Focus 50 min", "verb": "focus", "data": { "minutes": 50 } } ] },
+    {
+      "type": "ColumnSet",
+      "$when": "${focusOn == '' && $host.widgetSize != 'small'}",
+      "spacing": "Small",
+      "columns": [
+        { "type": "Column", "width": "stretch", "verticalContentAlignment": "Center",
+          "items": [ { "type": "Input.Number", "id": "minutes", "label": "Focus minutes", "value": 25, "min": 1, "max": 480, "placeholder": "Minutes" } ] },
+        { "type": "Column", "width": "auto", "verticalContentAlignment": "Bottom",
+          "items": [ { "type": "ActionSet", "actions": [ { "type": "Action.Execute", "title": "Start focus", "verb": "focus" } ] } ] }
+      ]
+    },
     { "type": "ActionSet", "$when": "${focusOn != '' && $host.widgetSize != 'small'}", "spacing": "Small",
       "actions": [ { "type": "Action.Execute", "title": "Stop focus", "verb": "stop" } ] },
     { "type": "TextBlock", "text": "${status}", "$when": "${status != ''}", "color": "Attention", "size": "Small", "spacing": "Small", "wrap": true },

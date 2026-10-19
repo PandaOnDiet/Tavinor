@@ -24,7 +24,7 @@ CLI on its own. Open items and reminders live in `notes.json` next to this file.
 Touching the top edge of the screen above the bar opens it without the hotkey
 ([Hover to open](#hover-to-open)). The chat and answers follow your
 [personality file](#personality), and [focus mode](#focus-mode) closes
-distracting tabs until a session ends. The roadmap is `TABY-PLAN.md`.
+distracting tabs until a session ends. The roadmap and plans live in the separate Tavinor-specs repo.
 
 ## Run
 

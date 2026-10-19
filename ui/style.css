@@ -155,3 +155,14 @@ button { font-family: inherit; }
 .toast .btn { height: 38px; font-size: 14px; padding: 0 16px; }
 
 .btn svg { vertical-align: -3px; margin-right: 4px; }
+
+/* the grid menu: two quiet columns, icon + label, like the reference */
+#btn-settings .x { display: none; }
+#btn-settings.x-on { background: #fff; color: #11131a; }
+#btn-settings.x-on .x { display: block; } #btn-settings.x-on .g { display: none; }
+.menu { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
+.mi { display: flex; align-items: center; gap: 14px; height: 46px; padding: 0 12px; border: none; border-radius: 14px;
+  background: transparent; color: #f4f6fb; font: 500 15.5px 'Segoe UI Variable Text', 'Segoe UI', sans-serif; cursor: pointer; text-align: left; }
+.mi svg { color: rgba(232, 236, 245, .8); flex: none; }
+.mi:hover, .mi:focus-visible { background: rgba(255, 255, 255, .07); outline: none; }
+.mi:active { transform: scale(.98); }

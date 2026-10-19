@@ -96,7 +96,7 @@ function close() {
   window.tav.opened(false);
   q.blur();
   setInteractive(false);
-  setTimeout(() => { if (!open) { reply.hidden = true; today.hidden = false; } }, 400);
+  setTimeout(() => { if (!open) { reply.hidden = true; menu.hidden = true; today.hidden = false; gridIcon(false); } }, 400);
   layoutToasts();
 }
 
@@ -109,7 +109,7 @@ function layoutToasts() {
   // Open: under whichever card shows.
   let top = 168;
   if (open) {
-    const card = reply.hidden ? today : reply;
+    const card = !menu.hidden ? menu : reply.hidden ? today : reply;
     top = card.offsetTop + card.offsetHeight + 12;
   }
   toastBox.style.top = top + 'px';
@@ -245,6 +245,8 @@ async function refreshDay() {
 
 function showToday() {
   reply.hidden = true;
+  menu.hidden = true;
+  gridIcon(false);
   today.hidden = false;
   refreshDay().then(layoutToasts);
   layoutToasts();
@@ -256,6 +258,8 @@ function showReply(question, text) {
   $('reply-q').textContent = question ? 'You · “' + question + '”' : '';
   $('reply-a').textContent = text || '…';
   today.hidden = true;
+  menu.hidden = true;
+  gridIcon(false);
   reply.hidden = false;
   layoutToasts();
 }
@@ -278,7 +282,46 @@ mic.addEventListener('click', () => { window.tav.call('mic').catch(() => {}); })
 $('btn-focus').addEventListener('click', () => ask('start focus for 25 minutes'));
 $('btn-plan').addEventListener('click', () => ask('plan my day'));
 $('btn-back').addEventListener('click', showToday);
-$('btn-settings').addEventListener('click', () => { window.tav.openSettings(); close(); });
+// ---------------------------------------------------------------- menu
+// The grid button: a quiet two-column list. Each item is a phrase Tavinor
+// already understands, sent the same way as typing it.
+const menu = $('menu');
+const MENU = [
+  ['Chat', 'M5 6.5A2.5 2.5 0 017.5 4h9A2.5 2.5 0 0119 6.5v6a2.5 2.5 0 01-2.5 2.5H11l-4 3.5V15a2.5 2.5 0 01-2-2.5z', () => { ask('chat'); close(); }],
+  ['Today', 'M4.5 11L12 4.5l7.5 6.5M6.5 9.5V19.5h11V9.5', () => showToday()],
+  ['Tasks', 'M5 5h14v14H5zM8.5 12l2.5 2.5 4.5-5', () => ask('what is left')],
+  ['Notes', 'M7 4h7l4 4v12H7zM14 4v4h4M10 12h5M10 16h5', () => ask('notes')],
+  ['Habits', 'M12 21c-3.5 0-6-2.5-6-6 0-3 2-5 3.5-7 .5 2 1.5 3 2.5 3 0-3 1.5-5.5 4-8 .5 3 2 4.5 2 8 0 5.5-2.5 10-6 10z', () => ask('habits')],
+  ['Plan my day', 'M5 6.5h14v13H5zM5 10.5h14M9 4v4M15 4v4', () => ask('plan my day')],
+  ['Tomorrow', 'M5 6.5h14v13H5zM5 10.5h14M9 4v4M15 4v4M10 15h4', () => ask('calendar tomorrow')],
+  ['Focus 25 min', 'M12 21a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM12 9.5v4l2.5 1.5M10 3h4', () => ask('start focus for 25 minutes')],
+  ['Blocked sites', 'M12 20a8 8 0 100-16 8 8 0 000 16zM6.5 6.5l11 11', () => ask('blocked sites')],
+  ['Settings', 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z', () => { window.tav.openSettings(); close(); }],
+];
+for (const [label, d, go] of MENU) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mi';
+  b.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+  b.append(label);
+  b.addEventListener('click', go);
+  $('menu-list').append(b);
+}
+
+function gridIcon(on) {
+  $('btn-settings').classList.toggle('x-on', on);
+  $('btn-settings').setAttribute('aria-expanded', String(on));
+}
+
+$('btn-settings').addEventListener('click', () => {
+  if (!menu.hidden) return showToday();
+  today.hidden = true;
+  reply.hidden = true;
+  menu.hidden = false;
+  gridIcon(true);
+  layoutToasts();
+  for (const x of menu.querySelectorAll('.bd')) paint(x);
+});
 
 // ---------------------------------------------------------------- from Python
 window.tav.on('hello', (h) => {

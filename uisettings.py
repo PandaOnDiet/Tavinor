@@ -276,32 +276,48 @@ def page_activity():
     ]}
 
 
+GCAL_STEPS = [
+    ("gcal_step1", "1. Turn on the Calendar API",
+     "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com",
+     "Create a project if Google asks (any name), then press Enable."),
+    ("gcal_step2", "2. Name the app",
+     "https://console.cloud.google.com/apis/credentials/consent",
+     "App name Tavinor, your email, Audience: External. Then Publish app - "
+     "while it says Testing, Google signs you out every 7 days."),
+    ("gcal_step3", "3. Make the app keys",
+     "https://console.cloud.google.com/apis/credentials/oauthclient",
+     "Application type: Desktop app, name Tavinor, Create. Copy the two values below."),
+]
+
+
 def page_calendar():
+    """Before setup: the steps and the two boxes. After: just sign in."""
     import gcal
     cid, secret = gcal.client()
+    tail = T("meeting_reminders", "Meeting reminders",
+             "A toast %d minutes before each meeting" % gcal.REMIND_BEFORE,
+             cane.setting("meeting_reminders", True))
+    if cid and secret:
+        on = gcal.signed_in()
+        return {"title": "Calendar", "sections": [
+            {"title": "Google Calendar · " + ("connected" if on else "not connected"), "items": [
+                B("gcal_signout", "Sign out") if on else B("gcal_signin", "Sign in with Google"),
+                tail]},
+            {"items": [B("gcal_reset", "Replace app keys",
+                         confirm="Removes the app keys and signs you out.")]},
+        ], "footer": "Only calendar events are asked for. The sign-in stays in "
+                     "Windows Credential Manager."}
     return {"title": "Calendar", "sections": [
-        {"title": "Google Calendar · " + ("connected" if gcal.signed_in() else "not connected"),
-         "items": [
+        {"title": "Set up once · about 5 minutes", "items": [
+            I("Google wants every app registered. Do it once in your own Google "
+              "account; after this, the page is just Sign in with Google.")] +
+            [B(rid, label, note=note) for rid, label, _, note in GCAL_STEPS]},
+        {"title": "4. Paste the keys", "items": [
             {"type": "text", "id": "gcal_id", "label": "Client ID", "value": cid},
             {"type": "text", "id": "gcal_secret", "label": "Client secret", "secret": True,
-             "value": "", "button": "Save",
-             "desc": "saved in Windows Credential Manager" if secret else "nothing saved yet"},
-            B("gcal_signin", "Sign in with Google"),
-            B("gcal_signout", "Sign out"),
-            T("meeting_reminders", "Meeting reminders",
-              "A toast %d minutes before each meeting" % gcal.REMIND_BEFORE,
-              cane.setting("meeting_reminders", True)),
+             "value": "", "button": "Save", "desc": "kept in Windows Credential Manager"},
         ]},
-        {"title": "Setting it up", "items": [
-            I("1. Open console.cloud.google.com and create a project (any name).\n"
-              "2. APIs & Services › Library: enable Google Calendar API.\n"
-              "3. OAuth consent screen: External, app name Tavinor, your email; under "
-              "Test users add your own Google address.\n"
-              "4. Credentials › Create credentials › OAuth client ID › Desktop app.\n"
-              "5. Paste the Client ID and secret here, press Save, then Sign in with Google.\n"
-              "Tavinor asks only for calendar events. The sign-in token is kept in Windows "
-              "Credential Manager, never in a file."),
-        ]},
+        {"items": [tail]},
     ]}
 
 
@@ -473,12 +489,25 @@ def act(bar, pg, rid, value):
         return {"note": "saved"}
     if rid == "gcal_secret":
         import gcal
+        if not gcal.client()[0]:
+            return {"note": "paste the Client ID first", "ok": False}
         gcal.set_client(gcal.client()[0], str(value).strip() or gcal.client()[1])
-        return {"reload": True, "note": "saved - now sign in"}
+        return {"reload": True}
     if rid == "gcal_signin":
         import gcal
         _later(pg, rid, lambda: (gcal.sign_in(), True))
         return {"note": "a browser tab opened - finish there"}
+    if rid.startswith("gcal_step"):
+        url = next((u for r, _, u, _ in GCAL_STEPS if r == rid), None)
+        if not url:
+            raise ValueError("unknown step")
+        __import__("webbrowser").open(url)
+        return {"note": "opened in your browser"}
+    if rid == "gcal_reset":
+        import gcal
+        gcal.sign_out()
+        cane.key_set("google_client", "")
+        return {"reload": True}
     if rid == "gcal_signout":
         import gcal
         gcal.sign_out()

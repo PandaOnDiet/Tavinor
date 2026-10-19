@@ -1,0 +1,56 @@
+{
+  "type": "AdaptiveCard",
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "Focus",
+      "size": "Small",
+      "isSubtle": true,
+      "spacing": "None"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${focusLeft}",
+      "size": "ExtraLarge",
+      "weight": "Bolder",
+      "spacing": "None",
+      "$when": "${focusOn != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "min left",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 1,
+      "$when": "${focusOn != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${focusTask}",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 1,
+      "isSubtle": true,
+      "$when": "${focusTask != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "Off",
+      "size": "ExtraLarge",
+      "weight": "Bolder",
+      "spacing": "None",
+      "$when": "${focusOn == ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "Start one from the Tavinor widget",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 2,
+      "isSubtle": true,
+      "$when": "${focusOn == ''}"
+    }
+  ]
+}

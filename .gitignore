@@ -6,12 +6,14 @@ notes.json
 undo.json
 chat.json
 soul.md
-focus.json
+/focus.json
 habits.json
 tavinor.db
 cane.db
 notebook.json
 bridge.json
+/widget.json
+/widget-link.json
 # Piper voice files, downloaded (60 MB)
 voices/
 

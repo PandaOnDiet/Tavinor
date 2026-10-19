@@ -187,7 +187,7 @@ def clean_for_speech(text):
 
 # Piper: a natural neural voice, local and offline. The voice file sits in
 # voices/ (not in git). Without Piper or the file, Windows' own voice speaks.
-PIPER_VOICE = Path(__file__).with_name("voices") / "en_US-lessac-medium.onnx"
+PIPER_VOICE = tavinor.DATA / "voices" / "en_US-lessac-medium.onnx"
 _piper = [None]                # None = not tried yet, False = unavailable
 _piper_lock = threading.Lock()
 
@@ -208,6 +208,30 @@ def piper_voice():
                 except Exception:      # missing package, bad file: Windows voice
                     pass
         return _piper[0] or None
+
+
+_fetching = [False]
+
+
+def fetch_voice():
+    """Download the Piper voice (60 MB) in the background when it's missing,
+    as in a fresh install. Until it lands, Windows' voice speaks."""
+    if _fetching[0] or PIPER_VOICE.exists():
+        return
+    _fetching[0] = True
+
+    def go():
+        try:
+            from piper.download_voices import download_voice
+            PIPER_VOICE.parent.mkdir(parents=True, exist_ok=True)
+            download_voice(PIPER_VOICE.stem, PIPER_VOICE.parent)
+            with _piper_lock:
+                _piper[0] = None             # load it on the next reply
+        except Exception:                    # offline, no package: keep Windows' voice
+            pass
+        finally:
+            _fetching[0] = False
+    threading.Thread(target=go, daemon=True).start()
 
 
 class _PiperSay:
@@ -259,6 +283,8 @@ def speak(text, wav=""):
         return None
     _spoke[0] = time.monotonic()
     v = piper_voice()
+    if not v and not PIPER_VOICE.exists():
+        fetch_voice()
     if v:
         _speaker[0] = _PiperSay(v, text, wav)
         return _speaker[0]

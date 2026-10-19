@@ -20,7 +20,7 @@ from pathlib import Path
 import tavinor
 import winsys
 
-DB = Path(__file__).with_name("tavinor.db")
+DB = tavinor.DATA / "tavinor.db"
 EVERY = 5               # seconds between samples
 IDLE_AFTER = 120        # seconds without input before time counts as idle
 KEEP_DAYS = 30

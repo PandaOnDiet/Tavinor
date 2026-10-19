@@ -20,7 +20,7 @@ from pathlib import Path
 import tavinor
 import winsys
 
-STATE = Path(__file__).with_name("focus.json")
+STATE = tavinor.DATA / "focus.json"
 DEFAULT_SITES = ["youtube", "twitch", "x"]
 ALIASES = {"x": {"x", "twitter"}, "twitter": {"x", "twitter"}}
 DEFAULT_MIN = 25

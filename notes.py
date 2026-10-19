@@ -30,7 +30,7 @@ from pathlib import Path
 
 import tavinor
 
-BOOK = Path(__file__).with_name("notebook.json")
+BOOK = tavinor.DATA / "notebook.json"
 OLLAMA_EMBED = "nomic-embed-text"
 PREFER = ("nemotron-3-embed", "embed")           # NVIDIA: try these first
 # Models score on different scales (NVIDIA's right answers: 0.14-0.55;

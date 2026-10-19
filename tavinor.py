@@ -46,9 +46,18 @@ from pathlib import Path
 # its own settings cache, app index and Bar - and nothing would line up.
 sys.modules.setdefault("tavinor", sys.modules[__name__])
 
+# APP: the code and what ships with it (ui/, icons). DATA: what Tavinor
+# writes (settings, history, notes, downloaded voices). Run from source
+# they are the same folder; installed, APP is read-only (Program Files)
+# and DATA is %APPDATA%\Tavinor. Modules build their paths from these.
+FROZEN = bool(getattr(sys, "frozen", False))
+APP = Path(__file__).resolve().parent
+DATA = Path(os.environ.get("APPDATA", Path.home())) / "Tavinor" if FROZEN else APP
+DATA.mkdir(parents=True, exist_ok=True)
+
 # Renamed 2026-10-19: the database was cane.db. Move it once, before any
 # module opens it, so history and the access log carry over.
-_OLD_DB = Path(__file__).with_name("cane.db")
+_OLD_DB = DATA / "cane.db"
 if _OLD_DB.exists() and not _OLD_DB.with_name("tavinor.db").exists():
     _OLD_DB.rename(_OLD_DB.with_name("tavinor.db"))
 
@@ -71,8 +80,8 @@ MODEL =os.environ.get("CANE_MODEL", "qwen3:1.7b")
 ANSWER_MODEL = os.environ.get("CANE_ANSWER_MODEL", "nemotron-3-super:cloud")
 OLLAMA = "http://127.0.0.1:11434/api/chat"
 ESCALATE_CWD = os.environ.get("CANE_CWD", os.path.expanduser("~"))
-STORE = Path(__file__).parent / "notes.json"
-SETTINGS = Path(__file__).parent / "settings.json"
+STORE = DATA / "notes.json"
+SETTINGS = DATA / "settings.json"
 CHECK_EVERY = 30  # seconds between reminder sweeps
 
 MEDIA_KEYS = {
@@ -1254,7 +1263,7 @@ FOLDER_WORDS = {"downloads": "downloads", "download": "downloads",
                 "docs": "documents", "pictures": "pictures",
                 "photos": "pictures", "videos": "videos", "music": "music"}
 PLAN_MAX = 400          # files shown to the planner, newest first
-UNDO = Path(__file__).with_name("undo.json")
+UNDO = DATA / "undo.json"
 # Half-finished downloads: moving one breaks the download in progress.
 IN_PROGRESS = (".crdownload", ".part", ".partial", ".download", ".tmp")
 
@@ -3178,7 +3187,7 @@ def _tray_icon(u32):
             light = winreg.QueryValueEx(k, "SystemUsesLightTheme")[0] == 1
     except OSError:
         light = False
-    here = Path(__file__).parent
+    here = APP
     size = u32.GetSystemMetrics(49)                     # SM_CXSMICON
     # ponytail: theme read once at start; a theme switch shows after a restart
     for ico in (here / ("tavinor-tray-%s.ico" % ("light" if light else "dark")), here / "tavinor.ico"):
@@ -3314,7 +3323,7 @@ STARTUP = Path(os.path.expandvars(
 
 # ---------------------------------------------------------------- electron
 
-UI_DIR = Path(__file__).with_name("ui")
+UI_DIR = APP / "ui"
 ELECTRON = UI_DIR / "node_modules" / "electron" / "dist" / "electron.exe"
 
 
@@ -3357,16 +3366,20 @@ OLD_VBS = "Cane.vbs"       # the launcher's name before the rename
 
 
 def install_startup():
-    """Drop a launcher in the Startup folder. Runs windowless via pythonw."""
-    pyw = Path(sys.executable).with_name("pythonw.exe")
-    if not pyw.exists():
-        pyw = Path(sys.executable)
+    """Drop a launcher in the Startup folder. Runs windowless: pythonw and
+    this script from source; installed, Tavinor.exe on its own."""
     target = STARTUP / "Tavinor.vbs"
     (STARTUP / OLD_VBS).unlink(missing_ok=True)      # renamed in phase 13
+    if FROZEN:
+        run = '"""%s"""' % sys.executable
+    else:
+        pyw = Path(sys.executable).with_name("pythonw.exe")
+        if not pyw.exists():
+            pyw = Path(sys.executable)
+        run = '"""%s"" ""%s"""' % (pyw, Path(__file__).resolve())
     target.write_text(
         "' Starts Tavinor at login with no console window. Delete to disable.\r\n"
-        'CreateObject("WScript.Shell").Run """%s"" ""%s""", 0, False\r\n'
-        % (pyw, Path(__file__).resolve()), encoding="utf-8")
+        'CreateObject("WScript.Shell").Run %s, 0, False\r\n' % run, encoding="utf-8")
     return target
 
 

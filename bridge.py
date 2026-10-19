@@ -17,7 +17,7 @@ from pathlib import Path
 
 import tavinor
 
-FILE = Path(os.environ.get("CANE_BRIDGE") or Path(__file__).with_name("bridge.json"))
+FILE = Path(os.environ.get("CANE_BRIDGE") or tavinor.DATA / "bridge.json")
 APPROVE_WAIT = 120
 
 READS = {"get_day", "search_notes"}

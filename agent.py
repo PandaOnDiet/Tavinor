@@ -14,7 +14,7 @@ from pathlib import Path
 
 import tavinor
 
-CHAT = Path(__file__).with_name("chat.json")
+CHAT = tavinor.DATA / "chat.json"
 MAX_STEPS = 4          # model rounds per user message
 CONTEXT = 24           # stored messages sent back to the model
 KEEP = 400             # stored messages kept on disk

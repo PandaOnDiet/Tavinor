@@ -16,7 +16,7 @@ from pathlib import Path
 
 import tavinor
 
-SOUL = Path(__file__).with_name("soul.md")
+SOUL = tavinor.DATA / "soul.md"
 SECTIONS = ("Identity", "About you", "Rules", "Memory")
 DEFAULT_NAME = "Tavinor"
 

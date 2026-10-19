@@ -50,7 +50,7 @@ TYPE_DELAY = 0.008       # seconds between typed characters
 stop = threading.Event()  # set by the panic key
 _last_other = [None]      # last foreground window that wasn't Tavinor's own
 _LOCK = threading.Lock()
-DB = tavinor.Path(tavinor.__file__).with_name("tavinor.db")
+DB = tavinor.DATA / "tavinor.db"
 
 
 # ------------------------------------------------------------- level

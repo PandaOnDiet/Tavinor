@@ -15,7 +15,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-BRIDGE = Path(os.environ.get("CANE_BRIDGE") or Path(__file__).with_name("bridge.json"))
+_INSTALLED = Path(os.environ.get("APPDATA", "")) / "Tavinor" / "bridge.json"   # installed Tavinor
+BRIDGE = Path(os.environ.get("CANE_BRIDGE") or (_INSTALLED if _INSTALLED.exists()
+                                               else Path(__file__).with_name("bridge.json")))
 VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 WAIT = 150                  # a write waits for your click in Tavinor
 

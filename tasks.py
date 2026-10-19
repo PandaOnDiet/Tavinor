@@ -19,7 +19,7 @@ from pathlib import Path
 
 import tavinor
 
-HABITS = Path(__file__).with_name("habits.json")
+HABITS = tavinor.DATA / "habits.json"
 NUDGE_AT = "20:00"              # default habit nudge time
 EVERY = {"daily": list(range(7)), "weekdays": [0, 1, 2, 3, 4]}
 _LOCK = threading.Lock()

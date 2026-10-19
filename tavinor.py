@@ -3161,12 +3161,24 @@ class NOTIFYICONDATA(ctypes.Structure):
 
 
 def _tray_icon(u32):
-    """tavinor.ico beside the script if present, else the stock app icon."""
-    ico = Path(__file__).parent / "tavinor.ico"
-    if ico.exists():
-        h = u32.LoadImageW(None, str(ico), 1, 0, 0, 0x00000010 | 0x00000040)
-        if h:
-            return h
+    """The logo's tray icon for the taskbar's theme (white notch on a dark
+    taskbar, black on a light one), else tavinor.ico, else the stock icon.
+    Loaded at the small-icon size so Windows uses the hand-drawn 16 px frame."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows"
+                            r"\CurrentVersion\Themes\Personalize") as k:
+            light = winreg.QueryValueEx(k, "SystemUsesLightTheme")[0] == 1
+    except OSError:
+        light = False
+    here = Path(__file__).parent
+    size = u32.GetSystemMetrics(49)                     # SM_CXSMICON
+    # ponytail: theme read once at start; a theme switch shows after a restart
+    for ico in (here / ("tavinor-tray-%s.ico" % ("light" if light else "dark")), here / "tavinor.ico"):
+        if ico.exists():
+            h = u32.LoadImageW(None, str(ico), 1, size, size, 0x00000010)
+            if h:
+                return h
     # IDI_APPLICATION is MAKEINTRESOURCE(32512): an int cast to a string
     # pointer, not a string and not a plain int.
     return u32.LoadIconW(None, ctypes.cast(32512, wintypes.LPCWSTR))

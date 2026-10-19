@@ -114,17 +114,21 @@ mac" isn't weather, and "the build timed out after 5 minutes" isn't a timer.
 `lock` is never a correction target, because `clock` is one letter away and a
 typo must never lock your screen.
 
-The icon is `tavinor.ico` — a dark rounded tile with the same accent chevron the
-command bar uses as its prompt, so the tray and the bar read as one thing. It is
-generated, not committed art:
+The logo is a red tile with the black notch and two pixel eyes. The art lives
+in the Tavinor-specs repo (`brand/`); the app carries three exports:
 
-    python make_icon.py
+- `tavinor.ico` - the app icon, 16 to 256 px.
+- `tavinor-tray-dark.ico`, `tavinor-tray-light.ico` - the tray icon, a white
+  notch for a dark taskbar and a black one for a light taskbar, tuned pixel
+  by pixel at 16 px. Tavinor picks one from the Windows theme at start.
 
-`make_icon.py` writes the `.ico` by hand (ICONDIR + BMP DIBs) and rasterises the
-artwork with 4x supersampling for antialiasing — no Pillow, stdlib only. Seven
-sizes are packed in (16 through 256) so Windows picks a crisp one everywhere.
-Edit `PANEL`, `ACCENT`, or the chevron points at the top of `render()` and re-run
-to change it. Delete `tavinor.ico` and Tavinor falls back to the stock Windows icon.
+The notch face draws the same eyes: each is a 3x5 grid of rounded cells, and
+each mood switches cells on (`PIX` in `ui/app.js`), following `brand/faces/`.
+Without the tray files Tavinor falls back to `tavinor.ico`, then to the stock
+Windows icon.
+
+`make_icon.py` drew the old chevron icon and now writes over the logo: don't
+run it.
 
 ## What it handles
 

@@ -55,42 +55,40 @@ button { font-family: inherit; }
 .wave span { font-size: 15px; color: #bcd2ff; margin-left: 10px; white-space: nowrap; }
 @keyframes wv { 0%, 100% { height: 6px; } 50% { height: 26px; } }
 
-/* the face: two capsule eyes and a mouth; the head's glow is the mood */
+/* the face: the logo's pixel eyes, 3x5 rounded cells each (specs/brand);
+   app.js switches cells on per state, the head's glow is the mood */
 .face { position: relative; width: 150px; height: 96px; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 12px; z-index: 2; }
-.eyes { display: flex; gap: 34px; transition: transform .16s ease-out; }
-.eye { width: 30px; height: 46px; border-radius: 16px; background: #fff; box-shadow: 0 0 18px rgba(190, 210, 255, .55);
-  box-sizing: border-box; animation: blink 5.2s infinite;
-  transition: height .3s cubic-bezier(.34, 1.5, .5, 1), border-radius .3s, background .3s, box-shadow .3s; }
+  justify-content: center; z-index: 2; --px: #fff; }
+.eyes { display: flex; gap: 20px; transition: transform .16s ease-out; filter: drop-shadow(0 0 6px rgba(190, 210, 255, .5)); }
+.eye { display: grid; grid-template-columns: repeat(3, 8px); grid-auto-rows: 8px; gap: 2px; animation: blink 5.2s infinite; }
 .eye.r { animation-delay: .04s; }
+.eye i { border-radius: 2px; background: var(--px); opacity: 0; transition: opacity .18s, background .3s; }
+.eye i.on { opacity: 1; }
+.eye i.g { background: #E7222E; transform: translateX(10px); }
 @keyframes blink { 0%, 93%, 100% { transform: scaleY(1); } 95.5% { transform: scaleY(.08); } }
-.mouth { width: 28px; height: 11px; border: 4px solid #fff; border-top: none; border-radius: 0 0 22px 22px; box-sizing: border-box; transition: all .3s; }
 .dots, .z { display: none; }
-.s-listening .eye { height: 54px; box-shadow: 0 0 26px rgba(120, 170, 255, .9); animation: pulse 1.2s ease-in-out infinite; }
+.s-listening .eye { animation: pulse 1.2s ease-in-out infinite; }
+.s-listening .eyes { filter: drop-shadow(0 0 9px rgba(120, 170, 255, .9)); }
 @keyframes pulse { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.08); } }
-.s-listening .mouth { width: 14px; height: 14px; border: 4px solid #fff; border-radius: 50%; }
-.s-thinking .eyes { transform: translate(9px, -7px) !important; }
-.s-thinking .eye { height: 40px; animation: none; }
-.s-thinking .mouth { width: 18px; height: 4px; border: none; background: #fff; border-radius: 2px; }
+.s-thinking .eyes { transform: translate(10px, -10px) !important; }
+.s-thinking .eye { animation: none; }
 .s-thinking .dots { display: flex; position: absolute; right: -6px; top: 2px; gap: 4px; }
 .dots i { width: 6px; height: 6px; border-radius: 50%; background: #c9b6ff; animation: bob 1s infinite; }
 .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
 @keyframes bob { 0%, 100% { transform: translateY(0); opacity: .4; } 50% { transform: translateY(-5px); opacity: 1; } }
-.s-done .eye { height: 18px; background: transparent; border: 6px solid #fff; border-bottom: none; border-radius: 18px 18px 0 0; box-shadow: none; animation: none; }
-.s-done .mouth { width: 34px; height: 14px; }
+.s-done .eye { animation: none; }
 .s-done.face { animation: hop 1.2s ease-in-out 1; }
 @keyframes hop { 0%, 60%, 100% { transform: translateY(0); } 75% { transform: translateY(-6px); } }
-.s-error .eye { height: 10px; border-radius: 5px; background: #ffb4b4; box-shadow: 0 0 18px rgba(255, 90, 90, .8); animation: none; }
-.s-error .mouth { border: 4px solid #ffb4b4; border-bottom: none; border-radius: 22px 22px 0 0; height: 10px; }
+.s-error, .s-eyes { --px: #FF8A3D; }
+.s-error .eyes, .s-eyes .eyes { filter: drop-shadow(0 0 8px rgba(255, 138, 61, .8)); }
+.s-error .eye { animation: none; }
 .s-error.face { animation: shake .5s ease-in-out 1; }
 @keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-5px); } 45% { transform: translateX(5px); } 70% { transform: translateX(-3px); } }
-.s-focus .eye { height: 24px; border-radius: 12px; box-shadow: 0 0 18px rgba(80, 220, 210, .7); animation: breathe 4s ease-in-out infinite; }
+.s-focus .eye { animation: breathe 4s ease-in-out infinite; }
+.s-focus .eyes { filter: drop-shadow(0 0 7px rgba(80, 220, 210, .7)); }
 @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .72; } }
-.s-focus .mouth { width: 20px; height: 4px; border: none; background: #fff; border-radius: 2px; }
-.s-eyes .eye { background: #ff9a4d; box-shadow: 0 0 22px rgba(255, 138, 61, .9); }
-.s-eyes .mouth { border-color: #ff9a4d; }
-.s-sleeping .eye { height: 5px; border-radius: 3px; box-shadow: none; opacity: .7; animation: none; }
-.s-sleeping .mouth { width: 12px; height: 4px; border: none; background: rgba(255, 255, 255, .6); border-radius: 2px; }
+.s-sleeping .eye { animation: none; opacity: .7; }
+.s-sleeping .eyes { filter: none; }
 .s-sleeping .z { display: block; position: absolute; right: -4px; top: -6px; font-weight: 600; font-size: 14px;
   color: rgba(232, 236, 245, .6); animation: zz 2.8s ease-in-out infinite; }
 @keyframes zz { 0% { opacity: 0; transform: translate(0, 6px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -10px); } }

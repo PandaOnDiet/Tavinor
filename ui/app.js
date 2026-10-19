@@ -19,10 +19,31 @@ let shot = null, shotAt = 0;
 let config = { hover: true, hover_slow: false };   // Settings > Hover
 
 // ---------------------------------------------------------------- face
+// The logo's eyes (specs/brand/faces): 5 rows, left eye then right eye,
+// 3 cells each. # on, . off, g on as the red glint shifted one cell right.
+const PIX = {
+  rest:    ['######', '###ggg', '######', '######', '######'],
+  full:    ['######', '######', '######', '######', '######'],
+  focused: ['......', '######', '######', '######', '######'],
+  happy:   ['......', '.#..#.', '#.##.#', '#.##.#', '......'],
+  sleepy:  ['......', '......', '......', '######', '######'],
+};
+const FACE_PIX = { idle: 'rest', listening: 'rest', thinking: 'full', done: 'happy', error: 'full',
+                   focus: 'focused', eyes: 'full', sleeping: 'sleepy' };
+for (const e of eyes.children) for (let i = 0; i < 15; i++) e.append(document.createElement('i'));
+
+function paintEyes(rows) {
+  [...eyes.children].forEach((e, side) => [...e.children].forEach((c, i) => {
+    const ch = rows[Math.floor(i / 3)][side * 3 + (i % 3)];
+    c.className = ch === '.' ? '' : ch === 'g' ? 'on g' : 'on';
+  }));
+}
+
 function setFace(state) {
   if (!GLOW[state]) state = 'idle';
   mode = state;
   face.className = 'face s-' + state;
+  paintEyes(PIX[FACE_PIX[state]]);
   head.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,.28), 0 24px 64px rgba(0,0,0,.5), 0 0 80px ' + GLOW[state];
   const listening = state === 'listening';
   wave.hidden = !listening;

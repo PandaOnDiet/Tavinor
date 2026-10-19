@@ -243,6 +243,41 @@ const ROWS = {
     return r;
   },
 
+  // A local model: Download / Cancel / Use, Remove asks first. The note
+  // under it carries download progress, sent by Python as it goes.
+  model(it) {
+    const r = el('div', 'col');
+    const line = el('div', 'row');
+    const n = el('div', 'note', '');
+    notes[it.id] = n;
+    const acts = el('div', 'field');
+    const btn = (label, cls, act) => {
+      const b = el('button', 'btn' + cls, label);
+      b.type = 'button';
+      if (act) b.addEventListener('click', () => set(it.id, act)); else b.disabled = true;
+      return b;
+    };
+    const main = { absent: ['Download', ' primary', 'pull'], pulling: ['Cancel', '', 'cancel'],
+                   installed: ['Use', ' primary', 'use'], using: ['In use', '', null] }[it.state];
+    acts.append(btn(...main));
+    if (it.state === 'installed') {
+      const rm = el('button', 'link', 'remove');
+      rm.type = 'button';
+      rm.addEventListener('click', () => {
+        const yes = btn('Yes, remove', ' danger', 'remove');
+        const no = btn('Cancel', '', null);
+        no.disabled = false;
+        no.addEventListener('click', () => { acts.replaceChildren(btn(...main), rm); note(it.id, ''); });
+        acts.replaceChildren(yes, no);
+        note(it.id, 'Deletes the downloaded model from this laptop.', false);
+      });
+      acts.append(rm);
+    }
+    line.append(txt(it.label, it.desc), acts);
+    r.append(line, n);
+    return r;
+  },
+
   list(it) {
     const box = el('div', '');
     if (!it.items.length) {
@@ -325,6 +360,10 @@ window.tav.on('backdrop', (pic) => {
 window.tav.on('events', (evs) => {
   for (const e of evs) {
     if (e.kind === 'note' && e.data && e.data.page === current) note(e.data.id, e.data.text, e.data.ok);
+    if (e.kind === 'settings_reload' && e.data && e.data.page === current) {
+      const keep = Object.fromEntries(Object.entries(notes).map(([k, v]) => [k, [v.textContent, !v.classList.contains('bad')]]));
+      load(current, null, true).then(() => { for (const [k, [txt, ok]] of Object.entries(keep)) if (txt && notes[k]) note(k, txt, ok); });
+    }
   }
 });
 

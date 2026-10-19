@@ -1726,6 +1726,33 @@ def check_mcp():
     print("mcp: %d checks passed" % n)
 
 
+def check_local_models():
+    """Brain > Local models: states, the memory warning, Use, bad names."""
+    import uisettings as u
+    saved = tavinor.SETTINGS, u._installed, u._ram_gb
+    tavinor.SETTINGS = pathlib.Path(tempfile.mkdtemp()) / "s.json"
+    u._installed, u._ram_gb = (lambda: {"qwen3:4b"}), (lambda: 8.0)
+    try:
+        rows = {i["id"][3:]: i for i in u.local_models_section()["items"]}
+        assert list(rows) == [m[0] for m in u.LOCAL_MODELS]
+        assert rows["qwen3:4b"]["state"] == "installed" and rows["qwen3:0.6b"]["state"] == "absent"
+        assert "more than this laptop has" in rows["qwen3:14b"]["desc"]
+        assert "more than this laptop has" not in rows["qwen3:4b"]["desc"]
+        u.act(None, "brain", "lm:qwen3:4b", "use")
+        assert tavinor.provider() == "ollama" and tavinor.current_model() == "qwen3:4b"
+        rows = {i["id"][3:]: i for i in u.local_models_section()["items"]}
+        assert rows["qwen3:4b"]["state"] == "using"
+        for bad in (("lm:evil:latest", "pull"), ("lm:qwen3:4b", "explode")):
+            try:
+                u.act(None, "brain", *bad)
+                raise AssertionError("accepted %r" % (bad,))
+            except ValueError:
+                pass
+    finally:
+        tavinor.SETTINGS, u._installed, u._ram_gb = saved
+    print("local models: 7 checks passed")
+
+
 def check_piper():
     """Piper speaks to a WAV, stops mid-sentence, and without its voice
     file the Windows voice takes over."""
@@ -1787,6 +1814,7 @@ def check_focus_link():
 
 
 if __name__ == "__main__":
+    check_local_models()
     check_piper()
     check_focus_link()
     check_mcp()

@@ -108,6 +108,7 @@ def page_brain():
              "options_from": "models"},
             B("test", "Test", note="answers, and can do tasks"),
         ]},
+        local_models_section(),
         {"items": [
             T("cloud_answers", "Cloud answers",
               "Off: questions open Copilot instead", tavinor.setting("cloud_answers", True)),
@@ -116,6 +117,100 @@ def page_brain():
               notes.source() == "ollama"),
         ]},
     ]}
+
+
+# Local models, light to heavy: (ollama name, label, tier, download GB).
+# Sizes read from registry.ollama.ai on 2026-10-19.
+LOCAL_MODELS = [
+    ("qwen3:0.6b", "Qwen3 0.6B", "Tiny", 0.5),
+    ("qwen3:1.7b", "Qwen3 1.7B", "Light", 1.4),
+    ("qwen3:4b", "Qwen3 4B", "Small", 2.5),
+    ("qwen3:8b", "Qwen3 8B", "Medium", 5.2),
+    ("qwen3:14b", "Qwen3 14B", "Large", 9.3),
+    ("gpt-oss:20b", "gpt-oss 20B", "Heavy", 13.8),
+    ("qwen3:30b", "Qwen3 30B", "Very heavy", 18.6),
+]
+_pulls = {}                    # name -> {"cancel": bool} while downloading
+
+
+def _ram_gb():
+    import ctypes
+
+    class M(ctypes.Structure):
+        _fields_ = [("len", ctypes.c_ulong), ("load", ctypes.c_ulong)] +                    [(n, ctypes.c_ulonglong) for n in ("total", "avail", "a", "b", "c", "d", "e")]
+    m = M()
+    m.len = ctypes.sizeof(M)
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+    return m.total / 2 ** 30
+
+
+def _ollama(path, payload=None, method="POST", timeout=10):
+    import json
+    import urllib.request
+    url = tavinor.OLLAMA.replace("/api/chat", path)
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(url, data, {"Content-Type": "application/json"}, method=method)
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def _installed():
+    import json
+    try:
+        with _ollama("/api/tags", method="GET", timeout=2) as r:
+            return {m["name"] for m in json.load(r).get("models", [])}
+    except OSError:
+        return None            # Ollama not running or not installed
+
+
+def local_models_section():
+    """Download a local model from light to heavy, then use it for answers."""
+    import shutil
+    if not shutil.which("ollama") and _installed() is None:
+        return {"title": "Local models", "items": [
+            I("Local models run through Ollama, a free app. Install it, then come back here."),
+            B("lm_get", "Get Ollama", note="ollama.com/download")]}
+    have = _installed() or set()
+    ram = _ram_gb()
+    using = tavinor.current_model("ollama") if tavinor.provider() == "ollama" else ""
+    rows = []
+    for name, label, tier, gb in LOCAL_MODELS:
+        need = gb * 1.2 + 1                     # rough: weights plus working memory
+        state = ("using" if name == using else "pulling" if name in _pulls
+                 else "installed" if name in have else "absent")
+        rows.append({"type": "model", "id": "lm:" + name, "label": label, "state": state,
+                     "desc": "%s · %.1f GB download · needs about %d GB memory%s"
+                             % (tier, gb, round(need), "" if need <= ram else " (more than this laptop has)")})
+    return {"title": "Local models · on this laptop, offline", "items": rows}
+
+
+def _pull(pg, rid, name):
+    """Stream Ollama's pull and report progress as the row's note."""
+    import json
+    import time
+    _pulls[name] = {"cancel": False}
+    last = 0.0
+    try:
+        with _ollama("/api/pull", {"model": name, "stream": True}, timeout=60) as r:
+            for line in r:
+                if _pulls[name]["cancel"]:
+                    _note(pg, rid, "cancelled - Download again resumes where it stopped", False)
+                    return
+                d = json.loads(line or b"{}")
+                if d.get("error"):
+                    raise RuntimeError(d["error"])
+                if d.get("total") and time.monotonic() - last > 0.7:
+                    last = time.monotonic()
+                    _note(pg, rid, "downloading %d%% · %.1f of %.1f GB" % (
+                        100 * d.get("completed", 0) / d["total"], d.get("completed", 0) / 1e9, d["total"] / 1e9))
+                elif d.get("status") and not d.get("total"):
+                    _note(pg, rid, d["status"])
+        _note(pg, rid, "downloaded - press Use to answer with it")
+    except Exception as e:
+        _note(pg, rid, "download failed: %s" % e, False)
+    finally:
+        _pulls.pop(name, None)
+        import bridge
+        bridge.publish("settings_reload", {"page": pg})
 
 
 SIDES = [("left", "Left"), ("center", "Center"), ("right", "Right")]
@@ -409,6 +504,30 @@ def act(bar, pg, rid, value):
         p = tavinor.provider()
         tavinor.set_setting("answer_model" if p == "ollama" else "model:" + p, str(value).strip())
         return {}
+    if rid == "lm_get":
+        __import__("webbrowser").open("https://ollama.com/download")
+        return {"note": "opened in your browser"}
+    if rid.startswith("lm:"):
+        name = rid[3:]
+        if name not in {m[0] for m in LOCAL_MODELS} or value not in ("pull", "cancel", "use", "remove"):
+            raise ValueError("unknown model action")
+        if value == "pull":
+            if name not in _pulls:
+                if not tavinor.start_ollama():
+                    return {"note": "Ollama isn't running and couldn't be started", "ok": False}
+                threading.Thread(target=_pull, args=(pg, rid, name), daemon=True).start()
+            return {"note": "starting download…", "reload": True}
+        if value == "cancel":
+            if name in _pulls:
+                _pulls[name]["cancel"] = True
+            return {"note": "stopping…"}
+        if value == "use":
+            tavinor.set_setting("provider", "ollama")
+            tavinor.set_setting("answer_model", name)
+            return {"reload": True}
+        with _ollama("/api/delete", {"model": name}, method="DELETE"):
+            pass
+        return {"reload": True}
     if rid == "test":
         _later(pg, rid, _test_answers)
         return {"note": "asking…"}

@@ -6,7 +6,7 @@
   delete note 3                                -> by its number in that list
 
 Separate from open items (those are things to do; these are things to
-know). Stored in notebook.json beside cane.py.
+know). Stored in notebook.json beside tavinor.py.
 
 Meaning comes from an embedding model. Settings > Notes picks the source:
   provider (default)  your answer provider's embedding model (NVIDIA: the
@@ -28,7 +28,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-import cane
+import tavinor
 
 BOOK = Path(__file__).with_name("notebook.json")
 OLLAMA_EMBED = "nomic-embed-text"
@@ -93,7 +93,7 @@ def delete(number):
 # ------------------------------------------------------------- embeddings
 
 def source():
-    return "ollama" if cane.setting("embed", "provider") == "ollama" else "provider"
+    return "ollama" if tavinor.setting("embed", "provider") == "ollama" else "provider"
 
 
 def _post(url, payload, headers=None, timeout=30):
@@ -107,22 +107,22 @@ def _ollama(texts, kind):
     # nomic-embed-text is trained with these prefixes; without them search
     # quality drops noticeably.
     pre = "search_query: " if kind == "query" else "search_document: "
-    d = _post(cane.OLLAMA.replace("/api/chat", "/api/embed"),
+    d = _post(tavinor.OLLAMA.replace("/api/chat", "/api/embed"),
               {"model": OLLAMA_EMBED, "input": [pre + t for t in texts]}, timeout=90)
     return d["embeddings"]
 
 
 def _provider_model(prov):
     """The provider's embedding model: saved, or the first listed that works."""
-    saved = cane.setting("embed_model:" + prov)
+    saved = tavinor.setting("embed_model:" + prov)
     if saved:
         return saved
-    names = [m for m in cane.provider_models(prov) if "embed" in m.lower()]
+    names = [m for m in tavinor.provider_models(prov) if "embed" in m.lower()]
     names.sort(key=lambda m: next((i for i, p in enumerate(PREFER) if p in m), 99))
     for m in names[:8]:
         try:
             _provider(prov, m, ["probe"], "query")
-            cane.set_setting("embed_model:" + prov, m)
+            tavinor.set_setting("embed_model:" + prov, m)
             return m
         except Exception:
             continue
@@ -130,12 +130,12 @@ def _provider_model(prov):
 
 
 def _provider(prov, model, texts, kind):
-    base = cane.PROVIDERS[prov][1]
+    base = tavinor.PROVIDERS[prov][1]
     payload = {"model": model, "input": texts, "encoding_format": "float"}
     if prov == "nvidia":
         payload["input_type"] = kind                     # NVIDIA requires it
     d = _post(base + "/embeddings", payload,
-              {"Authorization": "Bearer " + (cane.key_get(prov) or "")})
+              {"Authorization": "Bearer " + (tavinor.key_get(prov) or "")})
     return [row["embedding"] for row in sorted(d["data"], key=lambda r: r["index"])]
 
 
@@ -144,8 +144,8 @@ def embed(texts, kind="passage"):
     Ollama; (None, None, note) when nothing answers."""
     tried = []
     if source() == "provider":
-        prov = cane.provider()
-        if prov not in ("ollama", "anthropic") and cane.key_get(prov):
+        prov = tavinor.provider()
+        if prov not in ("ollama", "anthropic") and tavinor.key_get(prov):
             try:
                 model = _provider_model(prov)
                 if model:
@@ -154,7 +154,7 @@ def embed(texts, kind="passage"):
             except (urllib.error.URLError, OSError, KeyError, ValueError) as e:
                 tried.append("%s embeddings failed (%s)" % (prov, str(e)[:40]))
         else:
-            tried.append("%s has no embeddings" % cane.PROVIDERS[prov][0])
+            tried.append("%s has no embeddings" % tavinor.PROVIDERS[prov][0])
     try:
         return "ollama:" + OLLAMA_EMBED, _ollama(texts, kind), "; ".join(tried)
     except (urllib.error.URLError, OSError, KeyError, ValueError) as e:

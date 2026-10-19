@@ -17,7 +17,7 @@ import webbrowser
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import cane
+import tavinor
 
 HABITS = Path(__file__).with_name("habits.json")
 NUDGE_AT = "20:00"              # default habit nudge time
@@ -169,7 +169,7 @@ def nudge(bar, h):
                      sub=("%d-day streak - keep it going" % s) if s else "not done yet today",
                      buttons=(("Later", None, False), ("Done", lambda: checkin(h["name"]), True)))
         return
-    from cane import FG, DIM, ACCENT, FONT_SM
+    from tavinor import FG, DIM, ACCENT, FONT_SM
     import winsound
     winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)
     w, cv, close = bar._toast(112)
@@ -197,24 +197,24 @@ def split_targets(text):
 
 def set_workspace(ref, text):
     apps, links = split_targets(text)
-    with cane._LOCK:
-        items = cane.load()
-        t = cane.pick_item([i for i in items if not i["done"]], ref)
+    with tavinor._LOCK:
+        items = tavinor.load()
+        t = tavinor.pick_item([i for i in items if not i["done"]], ref)
         if not t:
             return None
         t["apps"] = sorted(set(t.get("apps", [])) | set(apps), key=str.lower)
         t["links"] = sorted(set(t.get("links", [])) | set(links))
-        cane.save(items)
+        tavinor.save(items)
         return t
 
 
 def start(ref, ui=None):
-    t = cane.pick_item(cane.open_items(), ref)
+    t = tavinor.pick_item(tavinor.open_items(), ref)
     if not t:
         return "no open task matching %r" % ref
     opened, failed = [], []
     for a in t.get("apps", []):
-        r = cane.dispatch({"intent": "launch", "arg": a}, ui)
+        r = tavinor.dispatch({"intent": "launch", "arg": a}, ui)
         (opened if r.startswith("opened") else failed).append(a)
     for link in t.get("links", []):
         webbrowser.open(link if link.startswith("http") else "https://" + link)
@@ -289,17 +289,17 @@ def dispatch(intent, ui=None):
             if not arg:
                 return "what's the task?"
             when = str(intent.get("when") or "")
-            due = cane.parse_when(when) if when else None
-            item = cane.add_note(arg, due)
+            due = tavinor.parse_when(when) if when else None
+            item = tavinor.add_note(arg, due)
             if when and not due:
                 return "task saved (couldn't read %r as a date): %s" % (when, arg[:40])
             return "task: %s%s" % (arg[:40], due and due.strftime(", due %a %d %b %H:%M") or "")
         if action == "subtask":
-            parent = cane.pick_item(cane.open_items(), str(intent.get("parent") or ""))
+            parent = tavinor.pick_item(tavinor.open_items(), str(intent.get("parent") or ""))
             if not parent:
                 return "no open task matching %r" % intent.get("parent")
             try:
-                cane.add_note(arg, parent=parent)
+                tavinor.add_note(arg, parent=parent)
             except ValueError as e:
                 return str(e)
             return "subtask of %s: %s" % (parent["text"][:30], arg[:30])

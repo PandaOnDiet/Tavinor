@@ -14,7 +14,7 @@ import re
 import threading
 from pathlib import Path
 
-import cane
+import tavinor
 
 SOUL = Path(__file__).with_name("soul.md")
 SECTIONS = ("Identity", "About you", "Rules", "Memory")
@@ -132,7 +132,7 @@ def _body(text):
 def prompt():
     """The part of the system prompt that carries the soul, or "" when it is
     switched off in settings."""
-    if not cane.setting("soul", True):
+    if not tavinor.setting("soul", True):
         return ""
     s = load()
     parts = []
@@ -181,7 +181,7 @@ def open_window(bar, back=None):
 
 def _window(bar, back=None):
     import tkinter as tk
-    from cane import PANEL, FG, DIM, ACCENT, FONT_BODY, FONT_SM, MARGIN
+    from tavinor import PANEL, FG, DIM, ACCENT, FONT_BODY, FONT_SM, MARGIN
 
     if getattr(bar, "_soul_win", None):
         try:
@@ -194,13 +194,13 @@ def _window(bar, back=None):
     W, H = 560, 690
     w = tk.Toplevel(bar.root)
     bar._soul_win = w
-    cv = cane.make_panel(w, W, H)
+    cv = tavinor.make_panel(w, W, H)
     x0 = bar._x()
     w.geometry("+%d+%d" % (x0 + 40, MARGIN))
 
     def close(*_):
         bar._soul_win = None
-        cane.slide(w, x0 + 40, MARGIN, 0.0, steps=8, then=w.destroy)
+        tavinor.slide(w, x0 + 40, MARGIN, 0.0, steps=8, then=w.destroy)
 
     bar.page_header(w, cv, "PERSONALITY", close,
                     back and (lambda: (close(), back())))
@@ -269,8 +269,8 @@ def _window(bar, back=None):
                    anchor="w", font=FONT_BODY, tags=tag)
     cv.create_text(24, 606, text="it goes to your answer provider with each "
                    "message", fill=DIM, anchor="nw", font=FONT_SM, tags=tag)
-    bar._toggle(cv, W - 60, 586, cane.setting("soul", True),
-                lambda on: cane.set_setting("soul", on), (tag,))
+    bar._toggle(cv, W - 60, 586, tavinor.setting("soul", True),
+                lambda on: tavinor.set_setting("soul", on), (tag,))
 
     note = cv.create_text(24, H - 24, text="", fill=DIM, anchor="w",
                           font=FONT_SM)
@@ -288,6 +288,6 @@ def _window(bar, back=None):
     go.config(fg=ACCENT, font=("Segoe UI", 9, "bold"))
     cv.create_window(W - 24, H - 24, anchor="e", window=go)
     cv.create_window(W - 80, H - 24, anchor="e", window=bar._button(
-        w, "Open soul.md", lambda: cane.os.startfile(str(SOUL))))
+        w, "Open soul.md", lambda: tavinor.os.startfile(str(SOUL))))
     w.focus_force()
-    cane.slide(w, x0, MARGIN, 0.97, x_from=x0 + 40)
+    tavinor.slide(w, x0, MARGIN, 0.97, x_from=x0 + 40)

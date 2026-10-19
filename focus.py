@@ -2,7 +2,7 @@
 it ends. Plus scheduled blocks ("block youtube 9-12 on weekdays") and a
 "let me through" override.
 
-State lives in focus.json beside cane.py, hand-editable like notes.json.
+State lives in focus.json beside tavinor.py, hand-editable like notes.json.
 
 Closing a tab is the one destructive thing here, so it is fenced in: the
 window must be a browser, must still be the foreground window, and its title
@@ -17,7 +17,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import cane
+import tavinor
 import winsys
 
 STATE = Path(__file__).with_name("focus.json")
@@ -259,7 +259,7 @@ def link(task):
     words = " ".join(task.lower().split())
     if not words:
         return None
-    items = cane.open_items()
+    items = tavinor.open_items()
     return (next((i for i in items if i["text"].lower() == words), None)
             or (next((i for i in items if words in i["text"].lower()), None)
                 if len(words) >= 4 else None))
@@ -267,7 +267,7 @@ def link(task):
 
 def task_of(h):
     """The open item a finished session was for, if it's still open."""
-    for i in cane.open_items():
+    for i in tavinor.open_items():
         if (h.get("task_id") and i.get("id") == h["task_id"]) or (
                 h.get("task_created") and i["created"] == h["task_created"]
                 and i["text"] == h.get("task")):
@@ -277,15 +277,15 @@ def task_of(h):
 
 def finish_task(h):
     """Mark the session's task done. Returns its text, or None."""
-    with cane._LOCK:
-        items = cane.load()
+    with tavinor._LOCK:
+        items = tavinor.load()
         for i in items:
             if not i["done"] and ((h.get("task_id") and i.get("id") == h["task_id"])
                                   or (h.get("task_created") and
                                       i["created"] == h["task_created"] and
                                       i["text"] == h.get("task"))):
                 i["done"] = True
-                cane.save(items)
+                tavinor.save(items)
                 return i["text"]
     return None
 
@@ -300,7 +300,7 @@ def finished(bar, h):
             buttons = (("OK", None, False), ("Mark task done", lambda: finish_task(h), True))
         bridge.toast("Focus", text, buttons=buttons, kind="focus", sound=True)
         return
-    from cane import FG, ACCENT
+    from tavinor import FG, ACCENT
     import winsound
     winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)
     w, cv, close = bar._toast(112)
@@ -329,7 +329,7 @@ def nudge(bar, site):
                      buttons=(("Let me through %d min" % LET_THROUGH,
                                lambda: let_through(site), False), ("OK", None, True)))
         return
-    from cane import FG, DIM, ACCENT, FONT_SM
+    from tavinor import FG, DIM, ACCENT, FONT_SM
     w, cv, close = bar._toast(112)
     cv.create_text(24, 26, text="BLOCKED", fill=ACCENT, anchor="w",
                    font=("Segoe UI", 8, "bold"))
@@ -359,7 +359,7 @@ def sites_window(bar, back=None):
 
 def _sites_window(bar, back=None):
     import tkinter as tk
-    from cane import PANEL, FG, DIM, ACCENT, FONT_BODY, FONT_SM, MARGIN
+    from tavinor import PANEL, FG, DIM, ACCENT, FONT_BODY, FONT_SM, MARGIN
 
     if getattr(bar, "_sites_win", None):
         try:
@@ -370,13 +370,13 @@ def _sites_window(bar, back=None):
     W, H = bar.W, 520
     w = tk.Toplevel(bar.root)
     bar._sites_win = w
-    cv = cane.make_panel(w, W, H)
+    cv = tavinor.make_panel(w, W, H)
     x0 = bar._x()
     w.geometry("+%d+%d" % (x0 + 40, MARGIN))
 
     def close(*_):
         bar._sites_win = None
-        cane.slide(w, x0 + 40, MARGIN, 0.0, steps=8, then=w.destroy)
+        tavinor.slide(w, x0 + 40, MARGIN, 0.0, steps=8, then=w.destroy)
 
     bar.page_header(w, cv, "BLOCKED SITES", close,
                     back and (lambda: (close(), back())))
@@ -389,7 +389,7 @@ def _sites_window(bar, back=None):
                           font=FONT_SM)
 
     def run(intent):
-        cv.itemconfig(note, text=cane.dispatch(intent))
+        cv.itemconfig(note, text=tavinor.dispatch(intent))
         draw()
 
     def head(text, hint):
@@ -462,7 +462,7 @@ def _sites_window(bar, back=None):
 
     draw()
     w.focus_force()
-    cane.slide(w, x0, MARGIN, 0.97, x_from=x0 + 40)
+    tavinor.slide(w, x0, MARGIN, 0.97, x_from=x0 + 40)
 
 
 # ------------------------------------------------------------- commands

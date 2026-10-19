@@ -11,7 +11,7 @@ report later with a bridge "note" event: {"page", "id", "text", "ok"}.
 import threading
 import time
 
-import cane
+import tavinor
 
 
 def _note(page, rid, text, ok=True):
@@ -57,21 +57,21 @@ def page_main():
     """The first screen: three quick switches, then one row per section.
     No descriptions here - they live inside each section."""
     import access, activity, focus, gcal, soul, voice
-    started = (cane.STARTUP / "Tavinor.vbs").exists() or (cane.STARTUP / cane.OLD_VBS).exists()
+    started = (tavinor.STARTUP / "Tavinor.vbs").exists() or (tavinor.STARTUP / tavinor.OLD_VBS).exists()
     s = soul.load()
     preset = next((k for k, v in soul.PRESETS.items() if v == s["personality"].strip()), "custom")
-    p = cane.provider()
-    model = cane.current_model(p).split("/")[-1]
+    p = tavinor.provider()
+    model = tavinor.current_model(p).split("/")[-1]
     fs = focus.load()
     return {"title": "Settings", "sections": [
         {"items": [
             T("startup", "Start with Windows", "", started),
-            T("hover", "Hover to open", "", cane.setting("hover", True)),
-            T("wake", "\"Hey %s\"" % s["name"], "", cane.setting("wake", False)),
+            T("hover", "Hover to open", "", tavinor.setting("hover", True)),
+            T("wake", "\"Hey %s\"" % s["name"], "", tavinor.setting("wake", False)),
         ]},
         {"items": [
             dict(N("chat", "Chats", "", "chat"), action=True),
-            N("brain", "Brain", "%s · %s" % (cane.PROVIDERS[p][0], model), "brain"),
+            N("brain", "Brain", "%s · %s" % (tavinor.PROVIDERS[p][0], model), "brain"),
             N("personality", "Personality", "%s · %s" % (s["name"], preset.lower()), "person"),
             N("access", "Permissions", access.level().title(), "shield"),
         ]},
@@ -91,26 +91,26 @@ def page_brain():
     """What answers: provider, key, model; whether answers go to the cloud;
     how notes are searched."""
     import notes
-    p = cane.provider()
+    p = tavinor.provider()
     keyed = p != "ollama"
-    k = cane.key_get(p) if keyed else None
+    k = tavinor.key_get(p) if keyed else None
     rows = notes.load()
     return {"title": "Brain", "sections": [
         {"title": "Answers", "items": [
             {"type": "select", "id": "provider", "label": "Provider", "value": p,
-             "options": [{"value": key, "label": v[0]} for key, v in cane.PROVIDERS.items()]},
+             "options": [{"value": key, "label": v[0]} for key, v in tavinor.PROVIDERS.items()]},
             {"type": "text", "id": "key", "label": "API key", "secret": True, "button": "Save",
              "disabled": not keyed, "value": "",
              "placeholder": "paste a key" if keyed else "not needed for Ollama",
              "desc": ("saved in Windows Credential Manager ····" + k[-4:]) if k else
                      ("no key saved" if keyed else "")},
-            {"type": "combo", "id": "model", "label": "Model", "value": cane.current_model(p),
+            {"type": "combo", "id": "model", "label": "Model", "value": tavinor.current_model(p),
              "options_from": "models"},
             B("test", "Test", note="answers, and can do tasks"),
         ]},
         {"items": [
             T("cloud_answers", "Cloud answers",
-              "Off: questions open Copilot instead", cane.setting("cloud_answers", True)),
+              "Off: questions open Copilot instead", tavinor.setting("cloud_answers", True)),
             T("embed", "Search notes on this laptop only",
               "%d notes · off: your provider's embedding model first" % len(rows),
               notes.source() == "ollama"),
@@ -123,10 +123,10 @@ SIDES = [("left", "Left"), ("center", "Center"), ("right", "Right")]
 
 def display_value():
     import bridge
-    where = cane.setting("notch_screen", "primary")
+    where = tavinor.setting("notch_screen", "primary")
     name = ("Follows the mouse" if where == "mouse" else "Main screen" if where == "primary"
             else next((d["label"] for d in bridge.DISPLAYS if d["id"] == where), "Main screen"))
-    return "%s · %s" % (name, dict(SIDES).get(cane.setting("notch_side", "center"), "Center"))
+    return "%s · %s" % (name, dict(SIDES).get(tavinor.setting("notch_side", "center"), "Center"))
 
 
 def page_display():
@@ -139,10 +139,10 @@ def page_display():
     screens += [{"value": d["id"], "label": d["label"], "desc": d["size"]} for d in bridge.DISPLAYS]
     return {"title": "Display", "sections": [
         {"title": "Screen", "items": [
-            {"type": "radio", "id": "notch_screen", "value": cane.setting("notch_screen", "primary"),
+            {"type": "radio", "id": "notch_screen", "value": tavinor.setting("notch_screen", "primary"),
              "options": screens}]},
         {"title": "Position", "items": [
-            {"type": "radio", "id": "notch_side", "value": cane.setting("notch_side", "center"),
+            {"type": "radio", "id": "notch_side", "value": tavinor.setting("notch_side", "center"),
              "options": [{"value": k, "label": v} for k, v in SIDES]}]},
     ], "footer": "Moves straight away"}
 
@@ -151,12 +151,12 @@ def page_general():
     return {"title": "General", "sections": [
         {"items": [
             T("hover_slow", "Hover needs a longer rest", "Fewer accidental opens",
-              cane.setting("hover_slow", False)),
+              tavinor.setting("hover_slow", False)),
             T("claude", "Claude Code button in chat", "Nothing goes to it unless you press it",
-              cane.setting("claude", False)),
+              tavinor.setting("claude", False)),
         ]},
-        {"title": "Features", "items": [T("feature:" + key, label, "", cane.feature_on(key))
-                                        for key, label, _ in cane.FEATURES]},
+        {"title": "Features", "items": [T("feature:" + key, label, "", tavinor.feature_on(key))
+                                        for key, label, _ in tavinor.FEATURES]},
     ]}
 
 
@@ -213,9 +213,9 @@ def page_voice():
             I("Push to talk: Ctrl+Alt+V, or the mic in the pill", dim=False),
             T("wake", "Wake word: \"Hey %s\"" % soul.name(),
               "Off by default. Listens on this laptop only and sends nothing. "
-              "About 2 s of CPU per phrase heard while on", cane.setting("wake", False)),
+              "About 2 s of CPU per phrase heard while on", tavinor.setting("wake", False)),
             T("speak", "Read answers aloud", "Answers and chat replies; code is left out",
-              cane.setting("speak", False)),
+              tavinor.setting("speak", False)),
             T("stt", "Use Whisper for speech to text",
               "Accurate, ~2 s. Off: Windows' own, instant but it got 4 of 6 test commands wrong",
               voice.engine() == "whisper"),
@@ -242,10 +242,10 @@ def page_access():
         ]},
         {"items": [
             T("access_keep", "Keep Full after a restart", "Off: a restart drops Full back to Ask",
-              cane.setting("access_keep", False)),
+              tavinor.setting("access_keep", False)),
             T("screenshots", "Screenshots to the vision model",
               "When reading text isn't enough, a screenshot of the window in front goes to "
-              "your provider's vision model", cane.setting("screenshots", True)),
+              "your provider's vision model", tavinor.setting("screenshots", True)),
             I("Panic key Ctrl+Alt+Esc drops to Off and stops what it is doing. The eyes turn "
               "orange whenever it reads or acts."),
             B("log", "Action log"),
@@ -267,7 +267,7 @@ def page_activity():
               "keystrokes, screenshots or page contents. Stays on this laptop; deleted after "
               "%d days." % activity.KEEP_DAYS, activity.on()),
             T("checkin", "Morning check-in", "Yesterday in one toast, the first time after 8 AM",
-              cane.setting("checkin", True)),
+              tavinor.setting("checkin", True)),
             I("Recorded: %d day%s, %d h active" % (days[0] or 0, "" if days[0] == 1 else "s",
                                                   (days[1] or 0) // 3600), dim=False),
             I("Ask: what did I do today · when am I most productive · how long on youtube this week"),
@@ -296,7 +296,7 @@ def page_calendar():
     cid, secret = gcal.client()
     tail = T("meeting_reminders", "Meeting reminders",
              "A toast %d minutes before each meeting" % gcal.REMIND_BEFORE,
-             cane.setting("meeting_reminders", True))
+             tavinor.setting("meeting_reminders", True))
     if cid and secret:
         on = gcal.signed_in()
         return {"title": "Calendar", "sections": [
@@ -339,8 +339,8 @@ def page_notes():
 
 def page_features():
     return {"title": "Features", "sections": [
-        {"items": [T("feature:" + key, label, "", cane.feature_on(key))
-                   for key, label, _ in cane.FEATURES]},
+        {"items": [T("feature:" + key, label, "", tavinor.feature_on(key))
+                   for key, label, _ in tavinor.FEATURES]},
         {"items": [I("A switched-off command replies that it is off")]},
     ]}
 
@@ -366,28 +366,28 @@ def act(bar, pg, rid, value):
     "show": text to show in a sheet, "options": [...]}."""
     import bridge
     if rid in SIMPLE:
-        cane.set_setting(rid, bool(value))
+        tavinor.set_setting(rid, bool(value))
         if rid in ("hover", "hover_slow"):
             bridge.publish("config", ui_config())
         return {"reload": rid in ("activity",)}
     if rid.startswith("feature:"):
-        cane.set_setting(rid, bool(value))
+        tavinor.set_setting(rid, bool(value))
         return {}
     if rid == "startup":
-        cane.install_startup() if value else cane.remove_startup()
+        tavinor.install_startup() if value else tavinor.remove_startup()
         return {}
     if rid == "stt":
-        cane.set_setting("stt", "whisper" if value else "windows")
+        tavinor.set_setting("stt", "whisper" if value else "windows")
         return {}
     if rid == "embed":
-        cane.set_setting("embed", "ollama" if value else "provider")
+        tavinor.set_setting("embed", "ollama" if value else "provider")
         return {"reload": True}
     if rid in ("notch_screen", "notch_side"):
         import bridge
         ok = ({"mouse", "primary"} | {d["id"] for d in bridge.DISPLAYS}) if rid == "notch_screen"             else dict(SIDES)
         if str(value) not in ok:
             raise ValueError("unknown choice")
-        cane.set_setting(rid, str(value))
+        tavinor.set_setting(rid, str(value))
         bridge.publish("place", place())
         return {}
     if rid == "chat":
@@ -396,18 +396,18 @@ def act(bar, pg, rid, value):
 
     # answers
     if rid == "provider":
-        if value not in cane.PROVIDERS:
+        if value not in tavinor.PROVIDERS:
             raise ValueError("unknown provider")
-        cane.set_setting("provider", value)
+        tavinor.set_setting("provider", value)
         return {"reload": True}
     if rid == "key":
-        cane.key_set(cane.provider(), str(value).strip())
+        tavinor.key_set(tavinor.provider(), str(value).strip())
         return {"reload": True}
     if rid == "models":
-        return {"options": cane.provider_models(cane.provider())}
+        return {"options": tavinor.provider_models(tavinor.provider())}
     if rid == "model":
-        p = cane.provider()
-        cane.set_setting("answer_model" if p == "ollama" else "model:" + p, str(value).strip())
+        p = tavinor.provider()
+        tavinor.set_setting("answer_model" if p == "ollama" else "model:" + p, str(value).strip())
         return {}
     if rid == "test":
         _later(pg, rid, _test_answers)
@@ -436,17 +436,17 @@ def act(bar, pg, rid, value):
     if rid == "sites":
         site = str(value.get("add") or value.get("remove") or "").strip().lower()
         action = "add" if value.get("add") else "remove"
-        msg = cane.dispatch({"intent": "block", "action": action, "site": site})
+        msg = tavinor.dispatch({"intent": "block", "action": action, "site": site})
         return {"reload": True, "note": msg}
     if rid == "blocks":
         import focus
         import re
         if value.get("add"):
             v = str(value["add"]).strip().lower()
-            item = cane.quick("block " + re.sub(r"\s+(weekdays|weekends|daily)$", r" on \1", v))
+            item = tavinor.quick("block " + re.sub(r"\s+(weekdays|weekends|daily)$", r" on \1", v))
             if not item:
                 return {"note": "didn't understand - try: youtube 9-12 weekdays", "ok": False}
-            return {"reload": True, "note": cane.dispatch(item)}
+            return {"reload": True, "note": tavinor.dispatch(item)}
         i = int(value["remove"])
         with focus._LOCK:
             s = focus.load()
@@ -506,7 +506,7 @@ def act(bar, pg, rid, value):
     if rid == "gcal_reset":
         import gcal
         gcal.sign_out()
-        cane.key_set("google_client", "")
+        tavinor.key_set("google_client", "")
         return {"reload": True}
     if rid == "gcal_signout":
         import gcal
@@ -521,13 +521,13 @@ def _test_answers():
     import agent
     t0 = time.time()
     try:
-        reply = cane.answer("Reply with the single word OK.", timeout=30).splitlines()[0]
+        reply = tavinor.answer("Reply with the single word OK.", timeout=30).splitlines()[0]
     except RuntimeError as e:
         return str(e), False
     if reply.startswith("("):                      # "(" = fell back
         return reply, False
     try:
-        raw, note = cane.complete(agent.system_prompt(), [{
+        raw, note = tavinor.complete(agent.system_prompt(), [{
             "role": "user", "content": "set a timer for 2 minutes"}], 45)
         acts = agent.parse(raw)["actions"]
         tasks_ok = not note and any(a["intent"] == "timer" and a.get("arg") == "2" for a in acts)
@@ -538,10 +538,10 @@ def _test_answers():
 
 
 def place():
-    return {"screen": cane.setting("notch_screen", "primary"),
-            "side": cane.setting("notch_side", "center")}
+    return {"screen": tavinor.setting("notch_screen", "primary"),
+            "side": tavinor.setting("notch_side", "center")}
 
 
 def ui_config():
-    return {"hover": bool(cane.setting("hover", True)),
-            "hover_slow": bool(cane.setting("hover_slow", False))}
+    return {"hover": bool(tavinor.setting("hover", True)),
+            "hover_slow": bool(tavinor.setting("hover_slow", False))}

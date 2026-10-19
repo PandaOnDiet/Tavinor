@@ -33,7 +33,7 @@ import urllib.request
 import webbrowser
 from datetime import date, datetime, timedelta
 
-import cane
+import tavinor
 
 AUTH = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN = "https://oauth2.googleapis.com/token"
@@ -50,7 +50,7 @@ _LOCK = threading.Lock()
 # ------------------------------------------------------------- credentials
 
 def client():
-    raw = cane.key_get("google_client")
+    raw = tavinor.key_get("google_client")
     try:
         c = json.loads(raw) if raw else {}
     except ValueError:
@@ -59,16 +59,16 @@ def client():
 
 
 def set_client(cid, secret):
-    cane.key_set("google_client", json.dumps({"id": cid.strip(),
+    tavinor.key_set("google_client", json.dumps({"id": cid.strip(),
                                               "secret": secret.strip()}))
 
 
 def signed_in():
-    return bool(cane.key_get("google_refresh"))
+    return bool(tavinor.key_get("google_refresh"))
 
 
 def sign_out():
-    cane.key_set("google_refresh", "")
+    tavinor.key_set("google_refresh", "")
     _token.update(access=None, expires=0.0)
 
 
@@ -144,7 +144,7 @@ def sign_in(timeout=180, open_browser=webbrowser.open):
                              "code_verifier": verifier})
     if not tok.get("refresh_token"):
         raise RuntimeError("Google sent no refresh token - try signing in again")
-    cane.key_set("google_refresh", tok["refresh_token"])
+    tavinor.key_set("google_refresh", tok["refresh_token"])
     _token.update(access=tok.get("access_token"),
                   expires=time.time() + int(tok.get("expires_in", 0)) - 60)
     return "signed in to Google Calendar"
@@ -154,7 +154,7 @@ def access_token():
     with _LOCK:
         if _token["access"] and time.time() < _token["expires"]:
             return _token["access"]
-        refresh = cane.key_get("google_refresh")
+        refresh = tavinor.key_get("google_refresh")
         if not refresh:
             raise RuntimeError("not signed in to Google - Settings > Calendar")
         cid, secret = client()
@@ -247,7 +247,7 @@ def reminders(bar):
     cache, fetched = [], 0.0
     while True:
         try:
-            if signed_in() and cane.setting("meeting_reminders", True):
+            if signed_in() and tavinor.setting("meeting_reminders", True):
                 if time.monotonic() - fetched > 300:
                     cache = events(date.today(), date.today() + timedelta(days=1))
                     fetched = time.monotonic()
@@ -337,7 +337,7 @@ def estimate(texts):
     if not texts:
         return out
     try:
-        reply, _ = cane.complete(ESTIMATE, [{"role": "user", "content": "\n".join(
+        reply, _ = tavinor.complete(ESTIMATE, [{"role": "user", "content": "\n".join(
             "%d. %s" % (i, t) for i, t in enumerate(texts, 1))}], 15)  # live: 32.7 s at 30
         data = json.loads(reply[reply.find("{"):reply.rfind("}") + 1])
         for row in data.get("tasks", []):
@@ -363,7 +363,7 @@ def plan_my_day(now=None):
             note.append("calendar not read: %s" % e)
     else:
         note.append("no calendar connected - meetings not included")
-    items = [i for i in cane.open_items()
+    items = [i for i in tavinor.open_items()
              if not i.get("due") or i["due"][:10] <= now.date().isoformat()][:12]
     tasks = estimate([i["text"] for i in items])
     best = None
@@ -453,7 +453,7 @@ def dispatch(intent, ui=None):
                 ui.show_answer("calendar " + arg, text)
             return "%d event%s %s" % (len(evs), "" if len(evs) == 1 else "s", arg)
         if act == "create":
-            start = cane.parse_when(str(intent.get("when") or ""))
+            start = tavinor.parse_when(str(intent.get("when") or ""))
             if not start:
                 return "couldn't read the time %r" % intent.get("when")
             ev = create(arg, start, int(str(intent.get("minutes") or DEFAULT_MIN)))
@@ -462,7 +462,7 @@ def dispatch(intent, ui=None):
             ev = find(arg)
             if not ev:
                 return "no event matching %r in the next two weeks" % arg
-            start = cane.parse_when(str(intent.get("when") or "")) if act == "move" else None
+            start = tavinor.parse_when(str(intent.get("when") or "")) if act == "move" else None
             if act == "move" and not start:
                 return "couldn't read the new time %r" % intent.get("when")
             what = ("move %s from %s to %s" % (ev["title"][:40],

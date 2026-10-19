@@ -1,11 +1,11 @@
 """Tavinor as an MCP server (phase 12), for Claude Code, Codex or any agent.
 
-    claude mcp add tavinor -- python "D:\\VS Code\\Cane\\mcp_server.py"
+    claude mcp add tavinor -- python "D:\\VS Code\\Tavinor\\app\\mcp_server.py"
 
 Speaks MCP over stdio (newline-delimited JSON-RPC 2.0) and forwards every
 tool call to the running Tavinor through bridge.py, so changes appear as a
 Do it / Cancel card in Tavinor and wait for you. If Tavinor isn't running, tools
-say so instead of acting. Standard library only; it never imports cane.py,
+say so instead of acting. Standard library only; it never imports tavinor.py,
 so starting it can't start a second Tavinor.
 """
 import json

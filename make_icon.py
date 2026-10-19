@@ -1,4 +1,4 @@
-"""Generate cane.ico - a dark rounded tile with the accent chevron.
+"""Generate tavinor.ico - a dark rounded tile with the accent chevron.
 
 Matches the "›" prompt glyph in the command bar, so the tray icon and the
 bar read as the same thing.
@@ -99,7 +99,7 @@ def main():
         offset += len(dib)
         blobs += dib
     ico = struct.pack("<HHH", 0, 1, n) + entries + blobs
-    out = Path(__file__).parent / "cane.ico"
+    out = Path(__file__).parent / "tavinor.ico"
     out.write_bytes(ico)
     print("wrote %s (%d bytes, sizes %s)"
           % (out, len(ico), ", ".join(str(s) for s in SIZES)))

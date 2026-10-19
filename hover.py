@@ -12,7 +12,7 @@ What stops it opening by accident:
 """
 import time
 
-import cane
+import tavinor
 import winsys
 
 POLL = 0.05            # seconds between cursor checks
@@ -49,7 +49,7 @@ def near_bar(x, y, screen_w, bar_w, bar_h, margin):
 
 def loop(bar):
     sw = winsys.u32.GetSystemMetrics(0)          # primary screen width
-    z = zone(sw, bar.W, cane.MARGIN)
+    z = zone(sw, bar.W, tavinor.MARGIN)
     rest_since = away_since = None
     on, checked, slow = True, 0.0, 1.0
     while True:
@@ -57,8 +57,8 @@ def loop(bar):
         try:
             now = time.monotonic()
             if now - checked > 2:                # not 20 file reads a second
-                on, checked = cane.setting("hover", True), now
-                slow = 2.5 if cane.setting("hover_slow", False) else 1.0
+                on, checked = tavinor.setting("hover", True), now
+                slow = 2.5 if tavinor.setting("hover_slow", False) else 1.0
             x, y = winsys.cursor()
 
             if bar.visible:
@@ -66,7 +66,7 @@ def loop(bar):
                 if not (bar.hover_opened and not bar.engaged):
                     away_since = None
                     continue
-                if near_bar(x, y, sw, bar.W, bar.bar_height, cane.MARGIN):
+                if near_bar(x, y, sw, bar.W, bar.bar_height, tavinor.MARGIN):
                     away_since = None
                 elif away_since is None:
                     away_since = now

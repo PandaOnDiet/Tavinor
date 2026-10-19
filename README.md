@@ -31,11 +31,11 @@ distracting tabs until a session ends. The roadmap and plans live in the separat
 Tavinor lives in the system tray. There is no console window and no terminal left
 open — it runs under `pythonw.exe`.
 
-    python cane.py --install-startup   # start at login (do this once)
-    python cane.py --remove-startup    # stop starting at login
+    python tavinor.py --install-startup   # start at login (do this once)
+    python tavinor.py --remove-startup    # stop starting at login
 
-    pythonw cane.py                    # start it now, windowless
-    python  cane.py --show             # start it and open the bar immediately
+    pythonw tavinor.py                    # start it now, windowless
+    python  tavinor.py --show             # start it and open the bar immediately
 
 Startup writes a single file to `shell:startup` (`Tavinor.vbs`). Deleting that file
 disables autostart; nothing else is touched, no registry, no scheduled task.
@@ -114,7 +114,7 @@ mac" isn't weather, and "the build timed out after 5 minutes" isn't a timer.
 `lock` is never a correction target, because `clock` is one letter away and a
 typo must never lock your screen.
 
-The icon is `cane.ico` — a dark rounded tile with the same accent chevron the
+The icon is `tavinor.ico` — a dark rounded tile with the same accent chevron the
 command bar uses as its prompt, so the tray and the bar read as one thing. It is
 generated, not committed art:
 
@@ -124,7 +124,7 @@ generated, not committed art:
 artwork with 4x supersampling for antialiasing — no Pillow, stdlib only. Seven
 sizes are packed in (16 through 256) so Windows picks a crisp one everywhere.
 Edit `PANEL`, `ACCENT`, or the chevron points at the top of `render()` and re-run
-to change it. Delete `cane.ico` and Tavinor falls back to the stock Windows icon.
+to change it. Delete `tavinor.ico` and Tavinor falls back to the stock Windows icon.
 
 ## What it handles
 
@@ -316,7 +316,7 @@ Settings > Activity > Track activity. Every 5 seconds the window in front is
 added to a per-minute log: which app, which site (a browser's tab title, its
 last part: "Lofi - YouTube" is youtube), active or idle (no input for 2
 minutes). No keystrokes, screenshots or page contents. The lock screen
-isn't counted. It stays in `cane.db`, is deleted after 30 days, and
+isn't counted. It stays in `tavinor.db`, is deleted after 30 days, and
 "Delete everything" empties it.
 
 Ask `what did I do today`, `screen time yesterday`, `when am I most
@@ -418,7 +418,7 @@ days: never overlapping a meeting or another task.
 
 ## Agent hooks (MCP) for Claude Code and others
 
-    claude mcp add tavinor -- python "D:\VS Code\Cane\mcp_server.py"
+    claude mcp add tavinor -- python "D:\VS Code\Tavinor\app\mcp_server.py"
 
 Tools: `get_day`, `search_notes` (read), `add_task`, `add_note`,
 `start_focus` (each shows a Do it / Cancel card in Tavinor and waits up to 120
@@ -480,7 +480,7 @@ entry, so a misread can never trigger them unless your words mention them.
 
 ## When a media command does nothing
 
-    python cane.py --media next   # 3s to focus your player, then sends the key
+    python tavinor.py --media next   # 3s to focus your player, then sends the key
 
 This bypasses the model entirely, so it splits the two possible faults:
 

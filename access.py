@@ -16,7 +16,7 @@ carries approved=True, which only the chat sets after your click - the
 model's own JSON never gets that field through (agent.clean whitelists).
 
 Ctrl+Alt+Esc is the panic key: access drops to off and any typing in
-progress stops at the next character. Every action is logged in cane.db.
+progress stops at the next character. Every action is logged in tavinor.db.
 Full drops back to ask on restart unless "keep" is switched on.
 
 Eyes read text through Windows UI Automation (built in, nothing installed):
@@ -34,7 +34,7 @@ import time
 from ctypes import wintypes
 from datetime import datetime
 
-import cane
+import tavinor
 import winsys
 
 LEVELS = ("off", "ask", "full")
@@ -50,19 +50,19 @@ TYPE_DELAY = 0.008       # seconds between typed characters
 stop = threading.Event()  # set by the panic key
 _last_other = [None]      # last foreground window that wasn't Tavinor's own
 _LOCK = threading.Lock()
-DB = cane.Path(cane.__file__).with_name("cane.db")
+DB = tavinor.Path(tavinor.__file__).with_name("tavinor.db")
 
 
 # ------------------------------------------------------------- level
 
 def level():
-    v = cane.setting("access", "ask")
+    v = tavinor.setting("access", "ask")
     return v if v in LEVELS else "ask"
 
 
 def set_level(v):
     if v in LEVELS:
-        cane.set_setting("access", v)
+        tavinor.set_setting("access", v)
         if v != "off":
             stop.clear()
 
@@ -70,7 +70,7 @@ def set_level(v):
 def on_start():
     """Full drops to ask on restart unless kept. Never raises a level: off
     stays off, so a restart can't hand out access you took away."""
-    if level() == "full" and not cane.setting("access_keep", False):
+    if level() == "full" and not tavinor.setting("access_keep", False):
         set_level("ask")
 
 
@@ -401,7 +401,7 @@ def _vision_call(prov, model, question, b64, timeout=60):
     import urllib.request
     if prov == "anthropic":
         import anthropic
-        c = anthropic.Anthropic(api_key=cane.key_get(prov), timeout=timeout)
+        c = anthropic.Anthropic(api_key=tavinor.key_get(prov), timeout=timeout)
         r = c.messages.create(model=model, max_tokens=800, messages=[{
             "role": "user", "content": [
                 {"type": "image", "source": {"type": "base64",
@@ -412,9 +412,9 @@ def _vision_call(prov, model, question, b64, timeout=60):
         "role": "user", "content": [
             {"type": "text", "text": question},
             {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64}}]}]})
-    req = urllib.request.Request(cane.PROVIDERS[prov][1] + "/chat/completions",
+    req = urllib.request.Request(tavinor.PROVIDERS[prov][1] + "/chat/completions",
                                  body.encode(), {"Content-Type": "application/json",
-                                                 "Authorization": "Bearer " + cane.key_get(prov)})
+                                                 "Authorization": "Bearer " + tavinor.key_get(prov)})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return _json.load(r)["choices"][0]["message"].get("content") or ""
 
@@ -424,17 +424,17 @@ def vision_model(prov):
     first listed vision model that actually takes an image (on Panda's
     NVIDIA key most listed ones 404 or time out)."""
     if prov == "anthropic":
-        return cane.current_model("anthropic")
-    saved = cane.setting("vision_model:" + prov)
+        return tavinor.current_model("anthropic")
+    saved = tavinor.setting("vision_model:" + prov)
     if saved:
         return saved
-    names = [m for m in cane.provider_models(prov)
+    names = [m for m in tavinor.provider_models(prov)
              if re.search(r"vl\b|-vl|vision", m.lower())]
     names.sort(key=lambda m: next((i for i, p in enumerate(VISION_PREFER) if p in m), 9))
     for m in names[:6]:
         try:
             _vision_call(prov, m, "Reply OK.", probe_png(), timeout=20)
-            cane.set_setting("vision_model:" + prov, m)
+            tavinor.set_setting("vision_model:" + prov, m)
             return m
         except Exception:
             continue
@@ -443,14 +443,14 @@ def vision_model(prov):
 
 def look(h, question):
     """Ask the vision model about a window. Returns text for the chat."""
-    if not cane.setting("screenshots", True):
+    if not tavinor.setting("screenshots", True):
         return "screenshots are switched off in Settings > Screen access"
-    prov = cane.provider()
-    if prov == "ollama" or not cane.key_get(prov):
+    prov = tavinor.provider()
+    if prov == "ollama" or not tavinor.key_get(prov):
         return "looking needs a keyed provider with a vision model"
     model = vision_model(prov)
     if not model:
-        return "%s has no vision model that answers" % cane.PROVIDERS[prov][0]
+        return "%s has no vision model that answers" % tavinor.PROVIDERS[prov][0]
     png = screenshot(h)
     if not png:
         return "couldn't take a screenshot of that window"
@@ -604,7 +604,7 @@ def indicator(ui, what):
 def panic(bar):
     """Ctrl+Alt+Esc: off, and stop whatever is running."""
     stop.set()
-    cane.set_setting("access", "off")
+    tavinor.set_setting("access", "off")
     log({"action": "panic"}, True, "access set to off")
     bar.root.after(0, lambda: bar.alert(
         {"text": "Stopped. Screen access is now Off - turn it back on in Settings."},

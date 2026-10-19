@@ -1,7 +1,7 @@
 """The running app's side of the agent hooks (phase 12).
 
 A tiny HTTP endpoint on 127.0.0.1 (random port) that mcp_server.py calls.
-Each start writes bridge.json beside cane.py with the port and a fresh
+Each start writes bridge.json beside tavinor.py with the port and a fresh
 random token; requests without that token are refused. Anything that
 changes your data shows a Do it / Cancel card in Tavinor and waits for you -
 the same rule as the chat. If you don't answer in APPROVE_WAIT seconds,
@@ -15,7 +15,7 @@ import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import cane
+import tavinor
 
 FILE = Path(os.environ.get("CANE_BRIDGE") or Path(__file__).with_name("bridge.json"))
 APPROVE_WAIT = 120
@@ -30,7 +30,7 @@ def get_day():
     import tasks
     import gcal
     today = date.today().isoformat()
-    items = cane.open_items()
+    items = tavinor.open_items()
     out = {"date": today,
            "tasks": [{"n": i, "text": t["text"], "due": t.get("due"),
                       "subtask": bool(t.get("parent"))}
@@ -73,14 +73,14 @@ def run(tool, args):
         return json.dumps({"matches": [{"score": round(s, 3), "text": r["text"]}
                                        for s, r in hits], "note": how})
     if tool == "add_task":
-        return cane.dispatch({"intent": "task", "action": "add",
+        return tavinor.dispatch({"intent": "task", "action": "add",
                               "arg": str(args.get("text", "")),
                               "when": str(args.get("due", "") or "")})
     if tool == "add_note":
-        return cane.dispatch({"intent": "note", "action": "add",
+        return tavinor.dispatch({"intent": "note", "action": "add",
                               "arg": str(args.get("text", ""))})
     if tool == "start_focus":
-        return cane.dispatch({"intent": "focus", "action": "start",
+        return tavinor.dispatch({"intent": "focus", "action": "start",
                               "arg": str(args.get("task", "") or ""),
                               "minutes": str(args.get("minutes", 25) or 25)})
     raise ValueError("unknown tool %r" % tool)
@@ -205,8 +205,8 @@ def ui_day():
     import tasks
     today = date.today().isoformat()
     out = {"tasks": [{"key": i["created"], "text": i["text"], "due": i.get("due"),
-                      "sub": bool(i.get("parent"))} for i in cane.open_items()][:6],
-           "open": len(cane.open_items()), "next": None, "focus": None, "habit": None}
+                      "sub": bool(i.get("parent"))} for i in tavinor.open_items()][:6],
+           "open": len(tavinor.open_items()), "next": None, "focus": None, "habit": None}
     f = focus.current()
     if f:
         out["focus"] = {"task": f["task"], "left": round(f["left"])}
@@ -229,12 +229,12 @@ def ui_day():
 
 def mark_done_key(key):
     """Tick off one open item by its `created` stamp. Returns its text."""
-    with cane._LOCK:
-        items = cane.load()
+    with tavinor._LOCK:
+        items = tavinor.load()
         for i in items:
             if not i["done"] and i["created"] == key:
                 i["done"] = True
-                cane.save(items)
+                tavinor.save(items)
                 return i["text"]
     return None
 
@@ -245,22 +245,22 @@ def ui_call(bar, tool, args):
         with _EV_COND:
             import uisettings
             return {"last": _EV_N, "face": _FACE, "name": soul.name(),
-                    "side": cane.setting("notch_side", "center"),
-                    "screen": cane.setting("notch_screen", "primary"),
+                    "side": tavinor.setting("notch_side", "center"),
+                    "screen": tavinor.setting("notch_screen", "primary"),
                     "config": uisettings.ui_config()}
     if tool == "events":
         return events(int(args.get("after", 0)), float(args.get("wait", 20)))
     if tool == "ask":
         text = str(args.get("text", "")).strip()[:2000]
         if text:
-            threading.Thread(target=cane.run, args=(text, Remote(bar)),
+            threading.Thread(target=tavinor.run, args=(text, Remote(bar)),
                              daemon=True).start()
         return {"ok": bool(text)}
     if tool == "mic":
         import voice
         r = Remote(bar)
         voice.push_to_talk(r, heard=lambda t: (publish("heard", {"text": t}),
-                                               cane.run(t, r)))
+                                               tavinor.run(t, r)))
         return {"ok": True}
     if tool == "day":
         return ui_day()

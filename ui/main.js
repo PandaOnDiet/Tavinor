@@ -1,4 +1,4 @@
-// Tavinor's notch (phase E1). Started by cane.py, which passes the bridge
+// Tavinor's notch (phase E1). Started by tavinor.py, which passes the bridge
 // port and a UI-only token in the environment. All features live in Python;
 // this process draws them and forwards clicks.
 const { app, BrowserWindow, ipcMain, screen, desktopCapturer } = require('electron');
@@ -10,7 +10,7 @@ const TOKEN = process.env.TAVINOR_UI_TOKEN;
 const W = 640, H = 900;               // head, pill, a card and up to 3 toasts
 
 if (!PORT || !TOKEN || !app.requestSingleInstanceLock()) {
-  console.error('Start Tavinor with cane.py; it launches this window.');
+  console.error('Start Tavinor with tavinor.py; it launches this window.');
   app.exit(1);
 }
 

@@ -12,7 +12,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-import cane
+import tavinor
 
 CHAT = Path(__file__).with_name("chat.json")
 MAX_STEPS = 4          # model rounds per user message
@@ -203,7 +203,7 @@ def clean(a):
 
 def describe(a):
     try:
-        return cane.describe(a)
+        return tavinor.describe(a)
     except (KeyError, TypeError):
         return a["intent"]
 
@@ -219,7 +219,7 @@ def why(a):
 
 def run_action(a, ui):
     try:
-        return str(cane.dispatch(a, ui))
+        return str(tavinor.dispatch(a, ui))
     except Exception as e:           # one bad action must not end the chat
         return "error: %s" % e
 
@@ -231,10 +231,10 @@ def converse(text, ui=None, show=None, approve=None, propose=None,
     show(kind, text): "say" | "result" | "error" | "note" - for the window.
     approve(actions) -> bool: blocks until the user decides. None = decline.
     propose(fact): a memory the model wants to keep (phase 3 asks the user).
-    complete: injectable for tests; defaults to cane.complete.
+    complete: injectable for tests; defaults to tavinor.complete.
     """
     show = show or (lambda kind, t: None)
-    complete = complete or cane.complete
+    complete = complete or tavinor.complete
     rows = load()
     rows.append({"role": "user", "content": text})
     save(rows)
@@ -315,8 +315,8 @@ def hand_off():
     last = next((r["content"] for r in reversed(load())
                  if r["role"] == "user" and not r["content"].startswith("RESULTS:")), "")
     if last:
-        cane.subprocess.Popen([cane.shutil.which("claude"), last], cwd=cane.ESCALATE_CWD,
-                              creationflags=cane.subprocess.CREATE_NEW_CONSOLE)
+        tavinor.subprocess.Popen([tavinor.shutil.which("claude"), last], cwd=tavinor.ESCALATE_CWD,
+                              creationflags=tavinor.subprocess.CREATE_NEW_CONSOLE)
     return last
 
 
@@ -393,18 +393,18 @@ def _send(bar, text):
             _RUN.release()
             _pub("busy", on=False)
     _pub("me", text=text)
-    _pub("busy", on=True, model=cane.current_model())
+    _pub("busy", on=True, model=tavinor.current_model())
     threading.Thread(target=go, daemon=True).start()
     return {"ok": True}
 
 
 def ui_call(bar, tool, args):
     if tool == "chat_history":
-        return {"rows": history(), "name": soul_name(), "model": cane.current_model(),
+        return {"rows": history(), "name": soul_name(), "model": tavinor.current_model(),
                 "busy": _RUN.locked(),
                 "cards": [{"id": k, "lines": c["lines"], "buttons": c["buttons"]}
                           for k, c in list(_CARDS.items())],
-                "claude": bool(cane.setting("claude", False) and cane.shutil.which("claude"))}
+                "claude": bool(tavinor.setting("claude", False) and tavinor.shutil.which("claude"))}
     if tool == "chat_send":
         return _send(bar, str(args.get("text", "")))
     if tool == "chat_decide":
@@ -420,7 +420,7 @@ def ui_call(bar, tool, args):
         clear()
         return {"ok": True}
     if tool == "chat_handoff":
-        last = hand_off() if cane.shutil.which("claude") else ""
+        last = hand_off() if tavinor.shutil.which("claude") else ""
         if last:
             _pub("note", text="handed to Claude Code: " + last[:60])
         return {"ok": bool(last)}
@@ -438,7 +438,7 @@ def open_window(bar, first=None, back=None):
 
 def _window(bar, first=None, back=None):
     import tkinter as tk
-    from cane import PANEL, FG, DIM, ACCENT, FONT_BODY, FONT_SM, MARGIN
+    from tavinor import PANEL, FG, DIM, ACCENT, FONT_BODY, FONT_SM, MARGIN
 
     if getattr(bar, "_chat", None):
         try:
@@ -451,7 +451,7 @@ def _window(bar, first=None, back=None):
 
     W, H = 560, 560
     w = tk.Toplevel(bar.root)
-    cv = cane.make_panel(w, W, H)
+    cv = tavinor.make_panel(w, W, H)
     x0 = bar._x()
     y0 = MARGIN          # the bar hides as the chat opens; don't leave a gap
     w.geometry("+%d+%d" % (x0 + 40, y0))
@@ -460,11 +460,11 @@ def _window(bar, first=None, back=None):
 
     def close(*_):
         bar._chat = None
-        cane.slide(w, x0 + 40, y0, 0.0, steps=8, then=w.destroy)
+        tavinor.slide(w, x0 + 40, y0, 0.0, steps=8, then=w.destroy)
 
     bar.page_header(w, cv, "CHAT · " + soul_name().upper(), close,
                     back and (lambda: (close(), back())))
-    model = cv.create_text(W - 60, 28, text=cane.current_model(), fill=DIM,
+    model = cv.create_text(W - 60, 28, text=tavinor.current_model(), fill=DIM,
                            anchor="e", font=FONT_SM)
 
     txt = tk.Text(w, bg=PANEL, fg=FG, font=FONT_BODY, wrap="word",
@@ -585,7 +585,7 @@ def _window(bar, first=None, back=None):
         put("me", text)
         state["busy"] = True
         cv.itemconfig(status, text="thinking…")
-        cv.itemconfig(model, text=cane.current_model())
+        cv.itemconfig(model, text=tavinor.current_model())
 
         def go():
             try:
@@ -612,7 +612,7 @@ def _window(bar, first=None, back=None):
 
     cv.create_window(W - 24, H - 28, anchor="e",
                      window=bar._button(w, "Clear", wipe))
-    if cane.setting("claude", False) and cane.shutil.which("claude"):
+    if tavinor.setting("claude", False) and tavinor.shutil.which("claude"):
         def handed():
             last = hand_off()
             if last:
@@ -627,6 +627,6 @@ def _window(bar, first=None, back=None):
     entry.bind("<Return>", lambda e: send())
     w.focus_force()
     entry.focus_set()
-    cane.slide(w, x0, y0, 0.97, x_from=x0 + 40)
+    tavinor.slide(w, x0, y0, 0.97, x_from=x0 + 40)
     if first:
         send(first)

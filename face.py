@@ -14,7 +14,7 @@ Settings > Appearance can hide it, bringing the chevron back.
 """
 import random
 
-import cane
+import tavinor
 
 CX, CY = 30, 42          # centre, where the chevron sat
 STATES = ("idle", "listening", "thinking", "done", "error", "focus", "eyes")
@@ -36,7 +36,7 @@ class Face:
         self._schedule_blink()
 
     def enabled(self):
-        return bool(cane.setting("face", True))
+        return bool(tavinor.setting("face", True))
 
     def set(self, state):
         if state not in STATES:
@@ -56,10 +56,10 @@ class Face:
                 f(state)
         self.state = state
         if not self.enabled():
-            cv.create_text(CX, CY, text="›", fill=cane.ACCENT, tags="face",
+            cv.create_text(CX, CY, text="›", fill=tavinor.ACCENT, tags="face",
                            font=("Segoe UI", 24, "bold"))
             return
-        col = ORANGE if state == "eyes" else cane.ACCENT
+        col = ORANGE if state == "eyes" else tavinor.ACCENT
         x1, x2, ey = CX - 6, CX + 6, CY - 3
         kw = dict(fill=col, outline="", tags="face")
         line = dict(fill=col, width=2, capstyle="round", tags="face")

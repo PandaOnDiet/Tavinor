@@ -3,7 +3,7 @@
 When switched on, the window in front is sampled every few seconds and
 added up per minute: which app, which site (for browsers, from the tab
 title), and whether you were active or idle. Nothing else - no keystrokes,
-no screenshots, no page contents. It stays in cane.db beside cane.py and is
+no screenshots, no page contents. It stays in tavinor.db beside tavinor.py and is
 deleted after KEEP_DAYS. Settings has a "delete everything" button.
 
 It answers: what did I do today, when am I most productive, how long on
@@ -17,10 +17,10 @@ import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import cane
+import tavinor
 import winsys
 
-DB = Path(__file__).with_name("cane.db")
+DB = Path(__file__).with_name("tavinor.db")
 EVERY = 5               # seconds between samples
 IDLE_AFTER = 120        # seconds without input before time counts as idle
 KEEP_DAYS = 30
@@ -45,7 +45,7 @@ def db():
 
 
 def on():
-    return bool(cane.setting("activity", False))
+    return bool(tavinor.setting("activity", False))
 
 
 def idle_seconds():
@@ -180,12 +180,12 @@ def _hour(h):
 def maybe_checkin(bar, now=None):
     """Once a day after 08:00: yesterday in one toast."""
     now = now or datetime.now()
-    if (not cane.setting("checkin", True) or now.hour < CHECKIN_AFTER
-            or cane.setting("checkin_day") == now.date().isoformat()):
+    if (not tavinor.setting("checkin", True) or now.hour < CHECKIN_AFTER
+            or tavinor.setting("checkin_day") == now.date().isoformat()):
         return
     y = now.date() - timedelta(days=1)
     mins = active_minutes(y)
-    cane.set_setting("checkin_day", now.date().isoformat())
+    tavinor.set_setting("checkin_day", now.date().isoformat())
     if mins < 10:
         return                          # nothing worth saying about yesterday
     top = ", ".join("%s %dm" % (a, m) for a, m in day_summary(y)[:3])

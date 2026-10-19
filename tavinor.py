@@ -41,10 +41,17 @@ from tkinter import ttk
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# The feature modules import cane. Run as a script this file is __main__,
+# The feature modules import tavinor. Run as a script this file is __main__,
 # and without this alias each of them would load a second, separate copy -
 # its own settings cache, app index and Bar - and nothing would line up.
-sys.modules.setdefault("cane", sys.modules[__name__])
+sys.modules.setdefault("tavinor", sys.modules[__name__])
+
+# Renamed 2026-10-19: the database was cane.db. Move it once, before any
+# module opens it, so history and the access log carry over.
+_OLD_DB = Path(__file__).with_name("cane.db")
+if _OLD_DB.exists() and not _OLD_DB.with_name("tavinor.db").exists():
+    _OLD_DB.rename(_OLD_DB.with_name("tavinor.db"))
+
 import agent  # noqa: E402  (after the alias, on purpose)
 import focus  # noqa: E402
 import hover  # noqa: E402
@@ -3154,8 +3161,8 @@ class NOTIFYICONDATA(ctypes.Structure):
 
 
 def _tray_icon(u32):
-    """cane.ico beside the script if present, else the stock app icon."""
-    ico = Path(__file__).parent / "cane.ico"
+    """tavinor.ico beside the script if present, else the stock app icon."""
+    ico = Path(__file__).parent / "tavinor.ico"
     if ico.exists():
         h = u32.LoadImageW(None, str(ico), 1, 0, 0, 0x00000010 | 0x00000040)
         if h:
@@ -3352,7 +3359,7 @@ def remove_startup():
 
 
 if __name__ == "__main__":
-    # python cane.py --media next   -> send one media key and exit.
+    # python tavinor.py --media next   -> send one media key and exit.
     # Isolates key injection from the router when a command "does nothing".
     if "--media" in sys.argv:
         name = sys.argv[sys.argv.index("--media") + 1]

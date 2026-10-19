@@ -21,7 +21,7 @@ import subprocess
 import threading
 import time
 
-import cane
+import tavinor
 
 CONFIDENCE = 0.75          # wake word: below this it is ignored
 CULTURE = "en-US"
@@ -143,7 +143,7 @@ _model = [None]
 
 def engine():
     """"whisper" when faster-whisper and its model are on this laptop."""
-    if cane.setting("stt", "whisper") == "windows":
+    if tavinor.setting("stt", "whisper") == "windows":
         return "windows"
     try:
         import faster_whisper  # noqa: F401
@@ -202,7 +202,7 @@ def stop_speaking():
 
 
 def maybe_speak(text):
-    if cane.setting("speak", False):
+    if tavinor.setting("speak", False):
         speak(text)
 
 
@@ -324,7 +324,7 @@ class Wake:
         self.dir = tempfile.mkdtemp(prefix="cane_wake_")
 
     def wanted(self):
-        return bool(cane.setting("wake", False)) and ears_allowed()
+        return bool(tavinor.setting("wake", False)) and ears_allowed()
 
     def stop(self):
         if self.proc and self.proc.poll() is None:

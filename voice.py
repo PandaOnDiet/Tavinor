@@ -14,12 +14,16 @@ The microphone is "ears" under Screen access: at Off, nothing listens.
 While listening for the wake word, audio is matched on this laptop and
 nothing is sent anywhere; only what you say after it becomes a command.
 """
+import io
 import os
 import re
 import tempfile
 import subprocess
 import threading
 import time
+import wave
+import winsound
+from pathlib import Path
 
 import tavinor
 
@@ -181,6 +185,72 @@ def clean_for_speech(text):
     return " ".join(text.split())[:1200]
 
 
+# Piper: a natural neural voice, local and offline. The voice file sits in
+# voices/ (not in git). Without Piper or the file, Windows' own voice speaks.
+PIPER_VOICE = Path(__file__).with_name("voices") / "en_US-lessac-medium.onnx"
+_piper = [None]                # None = not tried yet, False = unavailable
+_piper_lock = threading.Lock()
+
+
+def piper_voice():
+    """Load the voice once and warm it: the first synthesis takes ~5 s,
+    later ones ~0.1 s per sentence. Called at startup in the background."""
+    with _piper_lock:
+        if _piper[0] is None:
+            _piper[0] = False
+            if PIPER_VOICE.exists():
+                try:
+                    from piper import PiperVoice
+                    v = PiperVoice.load(str(PIPER_VOICE))
+                    with wave.open(io.BytesIO(), "wb") as w:
+                        v.synthesize_wav("ready", w)
+                    _piper[0] = v
+                except Exception:      # missing package, bad file: Windows voice
+                    pass
+        return _piper[0] or None
+
+
+class _PiperSay:
+    """One spoken reply: made in a thread, then played. Looks like the
+    Popen the Windows voice uses (poll, kill), so stopping is the same."""
+
+    def __init__(self, v, text, wav):
+        self.done = self.killed = False
+        self._stop = threading.Event()
+        threading.Thread(target=self._run, args=(v, text, wav), daemon=True).start()
+
+    def _run(self, v, text, wav):
+        if not wav:
+            fd, out = tempfile.mkstemp(prefix="tavinor_say_", suffix=".wav")
+            os.close(fd)                   # an open handle blocks the delete
+        else:
+            out = wav
+        try:
+            with _piper_lock, wave.open(out, "wb") as w:
+                v.synthesize_wav(text, w)
+                seconds = w.getnframes() / w.getframerate()
+            if not wav and not self.killed:
+                # Async, then wait it out: a synchronous PlaySound can't be
+                # stopped from another thread, an async one can.
+                winsound.PlaySound(out, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                self._stop.wait(seconds + 0.3)
+        finally:
+            self.done = True
+            if not wav:
+                try:
+                    os.remove(out)
+                except OSError:
+                    pass
+
+    def poll(self):
+        return 0 if self.done else None
+
+    def kill(self):
+        self.killed = True
+        winsound.PlaySound(None, 0)
+        self._stop.set()
+
+
 def speak(text, wav=""):
     """Say it (or write it to a WAV for tests). Stops anything still playing."""
     stop_speaking()
@@ -188,6 +258,10 @@ def speak(text, wav=""):
     if not text:
         return None
     _spoke[0] = time.monotonic()
+    v = piper_voice()
+    if v:
+        _speaker[0] = _PiperSay(v, text, wav)
+        return _speaker[0]
     argv, env = _ps(SPEAK_PS, wav=wav, say=text)
     p = subprocess.Popen(argv, env=env, creationflags=subprocess.CREATE_NO_WINDOW)
     _speaker[0] = p

@@ -374,8 +374,15 @@ filter ("I can open Croat", "Peking what time is it"). "Hey cane, open
 chrome" runs "open chrome" straight away. A stand-in for the name must be
 about the same length: Kane and Cain wake it, "okay cancel that" doesn't.
 
-**Read answers aloud** speaks answers and chat replies with Windows' voice,
-leaving code out. The microphone follows Screen access: at Off nothing
+**Read answers aloud** speaks answers and chat replies, leaving code out,
+with Piper: a natural neural voice that runs on the laptop, offline. It
+needs `pip install piper-tts` and the voice file, downloaded once (60 MB):
+
+    python -m piper.download_voices en_US-lessac-medium --download-dir voices
+
+Tavinor loads it in the background at start (about 2 s); after that a
+sentence takes ~0.1 s to make. Without Piper or the file, Windows' own
+voice speaks instead. The microphone follows Screen access: at Off nothing
 listens. Windows refused to start the speech scripts as `-EncodedCommand`
 ("Access is denied"), so their values travel in environment variables.
 

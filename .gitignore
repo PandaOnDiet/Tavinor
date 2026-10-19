@@ -12,3 +12,5 @@ tavinor.db
 cane.db
 notebook.json
 bridge.json
+# Piper voice files, downloaded (60 MB)
+voices/

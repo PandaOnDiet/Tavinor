@@ -1726,6 +1726,43 @@ def check_mcp():
     print("mcp: %d checks passed" % n)
 
 
+def check_piper():
+    """Piper speaks to a WAV, stops mid-sentence, and without its voice
+    file the Windows voice takes over."""
+    import tempfile, time, wave
+    import voice
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    n = 0
+    if voice.piper_voice():
+        p = voice.speak("Timer set for ten minutes.", wav=str(tmp / "a.wav"))
+        while p.poll() is None:
+            time.sleep(0.02)
+        with wave.open(str(tmp / "a.wav")) as w:
+            assert w.getnframes() / w.getframerate() > 0.8
+        p = voice._PiperSay(voice.piper_voice(), "word " * 60, "")
+        time.sleep(0.8)
+        t = time.monotonic()
+        p.kill()
+        while p.poll() is None:
+            time.sleep(0.02)
+        assert time.monotonic() - t < 1.0, "stop took too long"
+        import glob
+        time.sleep(0.2)
+        assert not [f for f in glob.glob(os.path.join(tempfile.gettempdir(), "tavinor_say_*.wav"))
+                    if os.path.getmtime(f) > t - 5], "spoken WAV left behind"
+        n += 3
+    saved, voice.PIPER_VOICE, voice._piper[0] = voice.PIPER_VOICE, tmp / "none.onnx", None
+    try:
+        assert voice.piper_voice() is None
+        p = voice.speak("fallback", wav=str(tmp / "b.wav"))
+        assert not isinstance(p, voice._PiperSay)
+        p.wait(30)
+        n += 2
+    finally:
+        voice.PIPER_VOICE, voice._piper[0] = saved, None
+    print("piper: %d checks passed%s" % (n, "" if n == 5 else " (voice file missing: Piper skipped)"))
+
+
 def check_focus_link():
     """Gap: a focus session on a real task can tick it off at the end."""
     import focus
@@ -1750,6 +1787,7 @@ def check_focus_link():
 
 
 if __name__ == "__main__":
+    check_piper()
     check_focus_link()
     check_mcp()
     check_gcal()

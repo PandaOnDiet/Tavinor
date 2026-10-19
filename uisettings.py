@@ -551,6 +551,8 @@ def act(bar, pg, rid, value):
         tavinor.set_setting(rid, bool(value))
         return {}
     if rid == "startup":
+        if tavinor.PACKAGED:
+            return {"reload": True, "note": "Windows manages this: Settings > Apps > Startup"}
         tavinor.install_startup() if value else tavinor.remove_startup()
         return {}
     if rid == "stt":

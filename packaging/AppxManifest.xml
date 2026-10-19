@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tavinor's MSIX package: the app (Tavinor\) and its Windows widget
+     (Widget\). packaging/build_msix.py fills in {VERSION} and {PUBLISHER}.
+     The widget parts follow Microsoft's "Implement a widget provider in a
+     C# Windows App" guide; the class id matches widget/WidgetProvider.cs. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 uap5 com desktop rescap">
+
+  <Identity Name="PandaOnDiet.Tavinor" Publisher="{PUBLISHER}" Version="{VERSION}" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Tavinor</DisplayName>
+    <PublisherDisplayName>PandaOnDiet</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+    <PackageDependency Name="Microsoft.WindowsAppRuntime.2" MinVersion="2.5.1.0"
+      Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Tavinor" Executable="Tavinor\Tavinor.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Tavinor" Description="A desktop assistant in a notch at the top of your screen"
+        BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <!-- Start with Windows: a packaged app can't use the Startup folder; this
+             shows in Settings > Apps > Startup. -->
+        <uap5:Extension Category="windows.startupTask" Executable="Tavinor\Tavinor.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask TaskId="TavinorStartup" Enabled="true" DisplayName="Tavinor" />
+        </uap5:Extension>
+
+        <!-- The widget provider, started by Windows over COM when a widget needs it. -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer Executable="Widget\TavinorWidget.exe" DisplayName="Tavinor widget">
+              <com:Class Id="67F13B41-3FA5-451A-B1FB-EF8590EBE48D" DisplayName="Tavinor widget" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+
+        <uap3:Extension Category="windows.appExtension">
+          <uap3:AppExtension Name="com.microsoft.windows.widgets" DisplayName="Tavinor" Id="TavinorWidgets" PublicFolder="Public">
+            <uap3:Properties>
+              <WidgetProvider>
+                <ProviderIcons>
+                  <Icon Path="Assets\WidgetIcon.png" />
+                </ProviderIcons>
+                <Activation>
+                  <CreateInstance ClassId="67F13B41-3FA5-451A-B1FB-EF8590EBE48D" />
+                </Activation>
+                <Definitions>
+                  <Definition Id="Tavinor_Today" DisplayName="Tavinor"
+                    Description="Weather, your next meeting, open tasks and the focus timer"
+                    AllowMultiple="false">
+                    <Capabilities>
+                      <Capability><Size Name="small" /></Capability>
+                      <Capability><Size Name="medium" /></Capability>
+                    </Capabilities>
+                    <ThemeResources>
+                      <Icons>
+                        <Icon Path="Assets\WidgetIcon.png" />
+                      </Icons>
+                      <Screenshots>
+                        <Screenshot Path="Assets\WidgetScreenshot.png" DisplayAltText="Tavinor widget: weather, next meeting and tasks" />
+                      </Screenshots>
+                      <DarkMode />
+                      <LightMode />
+                    </ThemeResources>
+                  </Definition>
+                </Definitions>
+              </WidgetProvider>
+            </uap3:Properties>
+          </uap3:AppExtension>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

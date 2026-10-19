@@ -51,6 +51,18 @@ sys.modules.setdefault("tavinor", sys.modules[__name__])
 # they are the same folder; installed, APP is read-only (Program Files)
 # and DATA is %APPDATA%\Tavinor. Modules build their paths from these.
 FROZEN = bool(getattr(sys, "frozen", False))
+
+
+def _packaged():
+    """Running from the MSIX package (Windows gives it an identity)."""
+    try:
+        n = ctypes.c_uint32(0)
+        return ctypes.windll.kernel32.GetCurrentPackageFullName(ctypes.byref(n), None) != 15700
+    except (AttributeError, OSError):                 # 15700: APPMODEL_ERROR_NO_PACKAGE
+        return False
+
+
+PACKAGED = _packaged()
 APP = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("APPDATA", Path.home())) / "Tavinor" if FROZEN else APP
 DATA.mkdir(parents=True, exist_ok=True)
@@ -3367,7 +3379,11 @@ OLD_VBS = "Cane.vbs"       # the launcher's name before the rename
 
 def install_startup():
     """Drop a launcher in the Startup folder. Runs windowless: pythonw and
-    this script from source; installed, Tavinor.exe on its own."""
+    this script from source; installed, Tavinor.exe on its own. The MSIX
+    package declares a Windows startup task instead (Settings > Apps >
+    Startup): a script can't launch a packaged app by its path."""
+    if PACKAGED:
+        return None
     target = STARTUP / "Tavinor.vbs"
     (STARTUP / OLD_VBS).unlink(missing_ok=True)      # renamed in phase 13
     if FROZEN:

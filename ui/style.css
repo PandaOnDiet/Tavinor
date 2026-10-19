@@ -17,6 +17,11 @@ button { font-family: inherit; }
               radial-gradient(120% 60% at 50% -10%, rgba(255, 255, 255, .13), transparent 60%); }
 .bd { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; z-index: -1; opacity: 0; transition: opacity .25s; }
 .has-bd .bd { opacity: 1; }
+/* Over a bright screen (white pages, orange headers) the picture would leave
+   white text unreadable, so a dark layer goes over it: --tint, set by app.js
+   from how bright the screen is. 0 on dark screens, so they look the same.
+   (The glass's own background can't do this: the picture covers it.) */
+.bd::after { content: ""; position: absolute; inset: 0; background: rgba(16, 18, 27, var(--tint, 0)); transition: background .25s; }
 .bd i { position: absolute; display: block; width: 640px; height: 900px; background-size: 640px 900px;
   filter: blur(22px) saturate(170%) brightness(.9); }
 

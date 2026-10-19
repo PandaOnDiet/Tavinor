@@ -89,9 +89,29 @@ async function grab() {
   if (shot) {
     for (const bd of document.querySelectorAll('.bd')) paint(bd);
     document.body.classList.add('has-bd');
+    document.body.style.setProperty('--tint', String(tintFor(await brightness(shot))));
   }
   return shot;
 }
+
+// Average brightness (0 dark .. 1 white) of the screen behind the pill and
+// cards, from a small copy of the picture.
+async function brightness(src) {
+  const img = new Image();
+  img.src = src;
+  try { await img.decode(); } catch { return 0; }
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 45;                       // the 640 x 900 window, 20x smaller
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0, c.width, c.height);
+  const px = g.getImageData(0, 8, c.width, 23).data; // rows behind the pill and cards
+  let sum = 0;
+  for (let i = 0; i < px.length; i += 4) sum += (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255;
+  return sum / (px.length / 4);
+}
+
+// Dark screens get no extra layer; a white one gets .72, enough for white text.
+const tintFor = (lum) => Math.min(0.72, Math.max(0, (lum - 0.3) * 1.1));
 
 // Line one glass piece's blurred picture up with the screen behind it.
 function paint(bd) {

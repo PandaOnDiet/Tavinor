@@ -15,8 +15,19 @@ namespace TavinorWidget
 
         static readonly Dictionary<string, bool> Running = new();   // widget id -> active
         static readonly object Gate = new();
-        static readonly string Card = ReadCard("card.json");
         static readonly string CustomizeCard = ReadCard("customize.json");
+        // One card per widget kind (the manifest's Definition ids). Today is the
+        // full one; the rest are small, one thing each, made for the lock screen.
+        static readonly Dictionary<string, string> Cards = new()
+        {
+            ["Tavinor_Today"] = ReadCard("card.json"),
+            ["Tavinor_Weather"] = ReadCard("weather.json"),
+            ["Tavinor_Air"] = ReadCard("air.json"),
+            ["Tavinor_Meeting"] = ReadCard("meeting.json"),
+            ["Tavinor_Tasks"] = ReadCard("tasks.json"),
+            ["Tavinor_Focus"] = ReadCard("focus.json"),
+        };
+        static readonly Dictionary<string, string> Kind = new();         // widget id -> Definition id
         static readonly HashSet<string> Customizing = new();             // widget ids showing the city screen
         static readonly Dictionary<string, string> Status = new();       // widget id -> last error, shown on the card
         static FileSystemWatcher? watcher;
@@ -30,13 +41,17 @@ namespace TavinorWidget
         {
             // After a restart or crash, pick up the widgets still pinned.
             foreach (var info in WidgetManager.GetDefault().GetWidgetInfos())
-                lock (Gate) Running[info.WidgetContext.Id] = false;
+                lock (Gate)
+                {
+                    Running[info.WidgetContext.Id] = false;
+                    Kind[info.WidgetContext.Id] = info.WidgetContext.DefinitionId;
+                }
             StartWatching();
         }
 
         public void CreateWidget(WidgetContext context)
         {
-            lock (Gate) Running[context.Id] = true;
+            lock (Gate) { Running[context.Id] = true; Kind[context.Id] = context.DefinitionId; }
             Update(context.Id);
         }
 
@@ -45,6 +60,7 @@ namespace TavinorWidget
             lock (Gate)
             {
                 Running.Remove(widgetId);
+                Kind.Remove(widgetId);
                 Customizing.Remove(widgetId);
                 Status.Remove(widgetId);
                 if (Running.Count == 0) NoWidgetsLeft.Set();
@@ -100,7 +116,7 @@ namespace TavinorWidget
 
         public void Activate(WidgetContext context)
         {
-            lock (Gate) Running[context.Id] = true;
+            lock (Gate) { Running[context.Id] = true; Kind[context.Id] = context.DefinitionId; }
             Update(context.Id);
         }
 
@@ -134,15 +150,16 @@ namespace TavinorWidget
             try
             {
                 bool customizing;
-                string status;
+                string status, card;
                 lock (Gate)
                 {
                     customizing = Customizing.Contains(widgetId);
                     status = Status.GetValueOrDefault(widgetId, "");
+                    card = Cards.GetValueOrDefault(Kind.GetValueOrDefault(widgetId, ""), Cards["Tavinor_Today"]);
                 }
                 var options = customizing
                     ? new WidgetUpdateRequestOptions(widgetId) { Template = CustomizeCard, Data = CardData.Customize(ReadData(), status) }
-                    : new WidgetUpdateRequestOptions(widgetId) { Template = Card, Data = CardData.Build(ReadData(), DateTime.Now, status) };
+                    : new WidgetUpdateRequestOptions(widgetId) { Template = card, Data = CardData.Build(ReadData(), DateTime.Now, status) };
                 WidgetManager.GetDefault().UpdateWidget(options);
             }
             catch (Exception) { /* the host went away mid-update: the next one will do */ }

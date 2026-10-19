@@ -49,6 +49,19 @@ Check(d["todo"]!.AsArray().Count == 2 && d["todo"]![1]!["key"]!.ToString() == "k
 Check(S(Data("{\"tasks\": {\"open\": 0, \"top\": [], \"list\": []}}"), "todoAny") == "" && Data(null)["todo"]!.AsArray().Count == 0, "empty to-do");
 Check(JsonNode.Parse(CardData.Build("{}", null, "Tavinor is busy"))!["status"]!.ToString() == "Tavinor is busy", "status line");
 
+// The small one-thing widgets.
+d = JsonNode.Parse(CardData.Build("{" + Weather + ", \"meeting\": {\"time\": \"10:40\", \"title\": \"\"}, " +
+    "\"tasks\": {\"open\": 3, \"top\": [\"call the bank\"]}, \"focus\": {\"minutes_left\": 25, \"ends\": \"2026-10-20T10:25:00\", \"task\": \"spec\"}}",
+    at))!.AsObject();
+Check(S(d, "aqiNum") == "191" && S(d, "aqiLabel") == "Unhealthy" && S(d, "place") == "Noida", "air widget");
+Check(S(d, "rangeShort") == "H 29° · L 20°", "weather widget");
+Check(S(d, "meetingTime") == "10:40" && S(d, "meetingIn") == "in 40 min" && S(d, "meetingTitle") == "Meeting", "meeting widget, private");
+Check(S(d, "tasksNum") == "3" && S(d, "tasksWord") == "tasks open" && S(d, "taskFirst") == "call the bank", "tasks widget");
+Check(S(d, "focusLeft") == "25" && S(d, "focusTask") == "spec", "focus widget");
+string In(string time, DateTime now) => JsonNode.Parse(CardData.Build("{\"meeting\": {\"time\": \"" + time + "\", \"title\": \"x\"}}", now))!["meetingIn"]!.ToString();
+Check(In("12:05", at) == "in 2 h 5 min" && In("12:00", at) == "in 2 h" && In("10:00", at) == "now", "meeting countdown");
+Check(S(Data("{\"tasks\": {\"open\": 1, \"top\": []}}"), "tasksWord") == "task open" && S(Data("{\"tasks\": {\"open\": 1, \"top\": []}}"), "taskFirst") == "", "one task, names hidden");
+
 // Customize: the city now; nothing when there isn't one.
 Check(JsonNode.Parse(CardData.Customize("{" + Weather + "}", "x"))!["city"]!.ToString() == "Noida", "customize city");
 Check(JsonNode.Parse(CardData.Customize(null))!["city"]!.ToString() == "", "customize, no file");
@@ -63,8 +76,12 @@ string[] Used(string file)
         .Select(x => x.Groups[1].Value)).Where(w => w != "host" && w != "widgetSize").Distinct().ToArray();
 }
 var keys = Data(null).Select(kv => kv.Key).Concat(new[] { "key", "text" }).ToHashSet();
-var missing = Used("card.json").Except(keys).ToList();
-Check(missing.Count == 0, "card fields missing from data: " + string.Join(", ", missing));
+List<string> missing;
+foreach (var file in new[] { "card.json", "weather.json", "air.json", "meeting.json", "tasks.json", "focus.json" })
+{
+    missing = Used(file).Except(keys).ToList();
+    Check(missing.Count == 0, file + " fields missing from data: " + string.Join(", ", missing));
+}
 var cKeys = JsonNode.Parse(CardData.Customize(null))!.AsObject().Select(kv => kv.Key).ToHashSet();
 missing = Used("customize.json").Except(cKeys).ToList();
 Check(missing.Count == 0, "customize fields missing from data: " + string.Join(", ", missing));

@@ -1,0 +1,48 @@
+{
+  "type": "AdaptiveCard",
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "Next meeting",
+      "size": "Small",
+      "isSubtle": true,
+      "spacing": "None"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${meetingTime}",
+      "size": "ExtraLarge",
+      "weight": "Bolder",
+      "spacing": "None",
+      "$when": "${meetingTime != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${meetingIn}",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 1,
+      "$when": "${meetingTime != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${meetingTitle}",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 1,
+      "isSubtle": true,
+      "$when": "${meetingTime != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "No more meetings today",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 2,
+      "isSubtle": true,
+      "$when": "${meetingTime == ''}"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "type": "AdaptiveCard",
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "Tasks",
+      "size": "Small",
+      "isSubtle": true,
+      "spacing": "None"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${tasksNum}",
+      "size": "ExtraLarge",
+      "weight": "Bolder",
+      "spacing": "None",
+      "$when": "${tasksNum != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${tasksWord}",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 1,
+      "$when": "${tasksNum != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${taskFirst}",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 2,
+      "isSubtle": true,
+      "$when": "${taskFirst != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "Turn on Open tasks in Tavinor: Settings > Widget",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 3,
+      "isSubtle": true,
+      "$when": "${tasksNum == ''}"
+    }
+  ]
+}

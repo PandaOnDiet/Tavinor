@@ -26,6 +26,11 @@
   <ItemGroup>
     <EmbeddedResource Include="card.json" />
     <EmbeddedResource Include="customize.json" />
+    <EmbeddedResource Include="weather.json" />
+    <EmbeddedResource Include="air.json" />
+    <EmbeddedResource Include="meeting.json" />
+    <EmbeddedResource Include="tasks.json" />
+    <EmbeddedResource Include="focus.json" />
     <Compile Remove="test\**" />
     <None Remove="test\**" />
   </ItemGroup>

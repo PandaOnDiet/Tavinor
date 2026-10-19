@@ -34,8 +34,14 @@ namespace TavinorWidget
             d["range"] = $"H {Str(w, "high")}° · L {Str(w, "low")}° · {Str(w, "rain")}% rain";
             if (w["feels"] != null)
                 d["detail"] = $"Feels {Str(w, "feels")}° · {Str(w, "humidity")}% humidity · {Str(w, "wind")} {Str(w, "wind_unit")}";
+            d["rangeShort"] = $"H {Str(w, "high")}° · L {Str(w, "low")}°";
+            d["place"] = Str(w, "place");
             if (w["aqi"] != null && w["aqi"]!.GetValueKind() != JsonValueKind.Null)
+            {
                 d["air"] = $"Air quality {Str(w, "aqi")} · {Str(w, "aqi_label")}";
+                d["aqiNum"] = Str(w, "aqi");
+                d["aqiLabel"] = Str(w, "aqi_label");
+            }
             if (w["sunrise"] != null)
                 d["sun"] = $"Sunrise {Str(w, "sunrise")} · Sunset {Str(w, "sunset")}";
         }
@@ -44,6 +50,9 @@ namespace TavinorWidget
         {
             d["meeting"] = Str(m, "title") == "" ? $"Meeting at {Str(m, "time")}" : $"{Str(m, "time")} · {Str(m, "title")}";
             d["meetingShort"] = $"Meeting {Str(m, "time")}";
+            d["meetingTime"] = Str(m, "time");
+            d["meetingTitle"] = Str(m, "title") == "" ? "Meeting" : Str(m, "title");
+            d["meetingIn"] = Until(Str(m, "time"), now ?? DateTime.Now);
         }
         var t = s["tasks"];
         if (t != null)
@@ -52,6 +61,9 @@ namespace TavinorWidget
             d["tasks"] = open == 0 ? "No open tasks" : open == 1 ? "1 task open" : $"{open} tasks open";
             var top = t["top"]?.AsArray().Select(x => "• " + x).ToArray() ?? Array.Empty<string>();
             d["taskList"] = string.Join("\n", top);
+            d["tasksNum"] = open.ToString();
+            d["tasksWord"] = open == 1 ? "task open" : "tasks open";
+            d["taskFirst"] = t["top"]?.AsArray().FirstOrDefault()?.ToString() ?? "";
             // The large size's to-do list, one row and a ✓ per task.
             var todo = new JsonArray();
             foreach (var x in t["list"]?.AsArray() ?? new JsonArray())
@@ -75,6 +87,8 @@ namespace TavinorWidget
             {
                 d["focus"] = $"Focus · {left} min left" + (Str(f, "task") == "" ? "" : " · " + Str(f, "task"));
                 d["focusOn"] = "1";
+                d["focusLeft"] = left;
+                d["focusTask"] = Str(f, "task");
             }
         }
         var h = s["habits"];
@@ -86,10 +100,22 @@ namespace TavinorWidget
     static string Finish(JsonObject d)
     {
         foreach (var k in new[] { "icon", "temp", "summary", "short", "range", "detail", "air", "sun", "meeting", "meetingShort",
-                                  "tasks", "taskList", "todoAny", "focus", "focusOn", "habits", "note", "status", "updated" })
+                                  "tasks", "taskList", "todoAny", "focus", "focusOn", "habits", "note", "status", "updated",
+                                  // the small one-thing widgets
+                                  "rangeShort", "place", "aqiNum", "aqiLabel", "meetingTime", "meetingTitle", "meetingIn",
+                                  "tasksNum", "tasksWord", "taskFirst", "focusLeft", "focusTask" })
             d[k] ??= "";
         d["todo"] ??= new JsonArray();
         return d.ToJsonString();
+    }
+
+    // "in 40 min", "in 2 h 5 min", "now" until a meeting at HH:MM today.
+    static string Until(string hhmm, DateTime now)
+    {
+        if (!TimeSpan.TryParse(hhmm, out var at)) return "";
+        var mins = (int)Math.Ceiling((now.Date + at - now).TotalMinutes);
+        if (mins <= 0) return "now";
+        return mins < 60 ? $"in {mins} min" : mins % 60 == 0 ? $"in {mins / 60} h" : $"in {mins / 60} h {mins % 60} min";
     }
 
     // The Customize screen: the city now, and why the last one didn't save.

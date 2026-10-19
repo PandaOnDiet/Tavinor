@@ -1,0 +1,48 @@
+{
+  "type": "AdaptiveCard",
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "Air quality",
+      "size": "Small",
+      "isSubtle": true,
+      "spacing": "None"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${aqiNum}",
+      "size": "ExtraLarge",
+      "weight": "Bolder",
+      "spacing": "None",
+      "$when": "${aqiNum != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${aqiLabel}",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 1,
+      "$when": "${aqiNum != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${place}",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 1,
+      "isSubtle": true,
+      "$when": "${aqiNum != ''}"
+    },
+    {
+      "type": "TextBlock",
+      "text": "No air data. Set a city in Tavinor: Settings > Widget",
+      "spacing": "None",
+      "wrap": true,
+      "maxLines": 3,
+      "isSubtle": true,
+      "$when": "${aqiNum == ''}"
+    }
+  ]
+}

@@ -81,6 +81,91 @@
                       <LightMode />
                     </ThemeResources>
                   </Definition>
+                  <!-- Small, one thing: made for the lock screen (small only, up to 4 widgets). -->
+                  <Definition Id="Tavinor_Weather" DisplayName="Tavinor weather" Description="The temperature and today's high and low"
+                    AllowMultiple="false" IsCustomizable="true">
+                    <Capabilities>
+                      <Capability><Size Name="small" /></Capability>
+                    </Capabilities>
+                    <ThemeResources>
+                      <Icons>
+                        <Icon Path="Assets\WidgetIcon.png" />
+                      </Icons>
+                      <Screenshots>
+                        <Screenshot Path="Assets\WidgetWeather.png" DisplayAltText="Tavinor weather widget" />
+                      </Screenshots>
+                      <DarkMode />
+                      <LightMode />
+                    </ThemeResources>
+                  </Definition>
+                  <!-- Small, one thing: made for the lock screen (small only, up to 4 widgets). -->
+                  <Definition Id="Tavinor_Air" DisplayName="Tavinor air quality" Description="Air quality where you are"
+                    AllowMultiple="false" IsCustomizable="false">
+                    <Capabilities>
+                      <Capability><Size Name="small" /></Capability>
+                    </Capabilities>
+                    <ThemeResources>
+                      <Icons>
+                        <Icon Path="Assets\WidgetIcon.png" />
+                      </Icons>
+                      <Screenshots>
+                        <Screenshot Path="Assets\WidgetAir.png" DisplayAltText="Tavinor air quality widget" />
+                      </Screenshots>
+                      <DarkMode />
+                      <LightMode />
+                    </ThemeResources>
+                  </Definition>
+                  <!-- Small, one thing: made for the lock screen (small only, up to 4 widgets). -->
+                  <Definition Id="Tavinor_Meeting" DisplayName="Tavinor next meeting" Description="When your next meeting starts"
+                    AllowMultiple="false" IsCustomizable="false">
+                    <Capabilities>
+                      <Capability><Size Name="small" /></Capability>
+                    </Capabilities>
+                    <ThemeResources>
+                      <Icons>
+                        <Icon Path="Assets\WidgetIcon.png" />
+                      </Icons>
+                      <Screenshots>
+                        <Screenshot Path="Assets\WidgetMeeting.png" DisplayAltText="Tavinor next meeting widget" />
+                      </Screenshots>
+                      <DarkMode />
+                      <LightMode />
+                    </ThemeResources>
+                  </Definition>
+                  <!-- Small, one thing: made for the lock screen (small only, up to 4 widgets). -->
+                  <Definition Id="Tavinor_Tasks" DisplayName="Tavinor tasks" Description="How many tasks are open"
+                    AllowMultiple="false" IsCustomizable="false">
+                    <Capabilities>
+                      <Capability><Size Name="small" /></Capability>
+                    </Capabilities>
+                    <ThemeResources>
+                      <Icons>
+                        <Icon Path="Assets\WidgetIcon.png" />
+                      </Icons>
+                      <Screenshots>
+                        <Screenshot Path="Assets\WidgetTasks.png" DisplayAltText="Tavinor tasks widget" />
+                      </Screenshots>
+                      <DarkMode />
+                      <LightMode />
+                    </ThemeResources>
+                  </Definition>
+                  <!-- Small, one thing: made for the lock screen (small only, up to 4 widgets). -->
+                  <Definition Id="Tavinor_Focus" DisplayName="Tavinor focus" Description="Minutes left in your focus session"
+                    AllowMultiple="false" IsCustomizable="false">
+                    <Capabilities>
+                      <Capability><Size Name="small" /></Capability>
+                    </Capabilities>
+                    <ThemeResources>
+                      <Icons>
+                        <Icon Path="Assets\WidgetIcon.png" />
+                      </Icons>
+                      <Screenshots>
+                        <Screenshot Path="Assets\WidgetFocus.png" DisplayAltText="Tavinor focus widget" />
+                      </Screenshots>
+                      <DarkMode />
+                      <LightMode />
+                    </ThemeResources>
+                  </Definition>
                 </Definitions>
               </WidgetProvider>
             </uap3:Properties>

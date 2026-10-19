@@ -10,5 +10,10 @@
     <Compile Include="..\CardData.cs" />
     <None Include="..\card.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\customize.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\weather.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\air.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\meeting.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\tasks.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\focus.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

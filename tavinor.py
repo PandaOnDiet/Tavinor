@@ -898,16 +898,19 @@ def warmup():
 
     Runs at launch and again each time the bar opens: after 8h idle the model
     is unloaded and the first command took 19s. Loading while you type hides
-    most of that. An empty generate only loads - no inference is spent.
+    most of that. Loading is only 3s of it: the rest is the model reading
+    SYSTEM the first time (~11s on CPU), which ollama then keeps. So this
+    sends one real command, and only when the model isn't loaded already -
+    the notch calls this on every open.
     """
     if not start_ollama():
         return
-    body = json.dumps({"model": MODEL, "keep_alive": "8h"}).encode()
     try:
-        urllib.request.urlopen(urllib.request.Request(
-            OLLAMA.replace("/api/chat", "/api/generate"), body,
-            {"Content-Type": "application/json"}), timeout=90).read()
-    except (urllib.error.URLError, OSError, TimeoutError):
+        with urllib.request.urlopen(OLLAMA.replace("/api/chat", "/api/ps"), timeout=5) as r:
+            if any(m.get("name") == MODEL for m in json.load(r).get("models", [])):
+                return
+        _ask("open notepad", 90)
+    except (urllib.error.URLError, OSError, TimeoutError, ValueError):
         pass
 
 

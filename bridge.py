@@ -152,16 +152,22 @@ class Remote:
 
     def __init__(self, bar):
         self.bar = bar
+        self.answered = False
 
     def __getattr__(self, name):
         return getattr(self.bar, name)
 
     def status(self, msg, keep=False):
         import re
-        publish("status", {"text": msg})
+        # The notch shows status and answers in one place: after an answer,
+        # run()'s "answered" would replace it on the card. One Remote is one
+        # request, so once it has answered, status only moves the face.
+        if not self.answered:
+            publish("status", {"text": msg})
         self.bar.set_face("error" if re.match(ERROR_RE, msg) else "done")
 
     def show_answer(self, question, text):
+        self.answered = True
         publish("answer", {"question": question, "text": text})
         import voice
         voice.maybe_speak(text)
@@ -267,6 +273,10 @@ def ui_call(bar, tool, args):
                                                tavinor.run(t, r)))
         return {"ok": True}
     if tool == "day":
+        # The notch asks for this as it opens: load the router model while
+        # you type, as the Tk bar's show() did. Cold, the first question
+        # spent ~16s loading it (2026-10-20). A no-op when already loaded.
+        threading.Thread(target=tavinor.warmup, daemon=True).start()
         return ui_day()
     if tool == "displays":
         global DISPLAYS

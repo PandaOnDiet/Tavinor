@@ -1726,6 +1726,35 @@ def check_mcp():
     print("mcp: %d checks passed" % n)
 
 
+def check_notch_answer():
+    """An answer stays on the notch's card: run()'s "answered" status used to
+    replace it (2026-10-20), while commands still show their status."""
+    import bridge
+    import voice
+
+    class Bar:
+        thread = []
+        def set_face(self, s): pass
+        def remember_turn(self, q, a): pass
+    saved = tavinor.answer, voice.maybe_speak, list(bridge._EV)
+    tavinor.answer = lambda q, h=None, timeout=45: "About 240 ml in a US cup."
+    voice.maybe_speak = lambda *a, **k: None
+    n = 0
+    try:
+        del bridge._EV[:]
+        tavinor.run("how many ml in a cup", bridge.Remote(Bar()),
+                    item={"intent": "ask", "arg": "how many ml in a cup"})
+        kinds = [(k, d.get("text")) for _, k, d in bridge._EV]
+        assert kinds == [("answer", "About 240 ml in a US cup.")], kinds; n += 1
+        del bridge._EV[:]
+        bridge.Remote(Bar()).status("timer set for 10 min")
+        assert [(k, d["text"]) for _, k, d in bridge._EV] == [("status", "timer set for 10 min")]; n += 1
+    finally:
+        tavinor.answer, voice.maybe_speak = saved[0], saved[1]
+        bridge._EV[:] = saved[2]
+    print("notch answer: %d checks passed" % n)
+
+
 def check_widget():
     """The Windows widget's snapshot: privacy, the Show switches, settings,
     and its buttons (widget.act over the bridge with the widget token)."""
@@ -1925,6 +1954,7 @@ def check_focus_link():
 
 
 if __name__ == "__main__":
+    check_notch_answer()
     check_widget()
     check_dizzy()
     check_local_models()

@@ -71,7 +71,6 @@ def page_main():
             T("wake", "\"Hey %s\"" % s["name"], "", tavinor.setting("wake", False)),
         ]},
         {"items": [
-            dict(N("chat", "Chats", "", "chat"), action=True),
             N("brain", "Brain", "%s · %s" % (tavinor.PROVIDERS[p][0], model), "brain"),
             N("personality", "Personality", "%s · %s" % (s["name"], preset.lower()), "person"),
             N("access", "Permissions", access.level().title(), "shield"),
@@ -595,9 +594,6 @@ def act(bar, pg, rid, value):
             raise ValueError("unknown choice")
         tavinor.set_setting(rid, str(value))
         bridge.publish("place", place())
-        return {}
-    if rid == "chat":
-        bar.root.after(0, lambda: __import__("agent").open_window(bar))
         return {}
 
     # answers

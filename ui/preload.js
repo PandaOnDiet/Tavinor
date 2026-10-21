@@ -2,6 +2,14 @@
 // and tell the window when to take the mouse.
 const { contextBridge, ipcRenderer } = require('electron');
 
+// In the pane's frame, mouse moves land here and never reach the notch page,
+// which decides when the window takes the mouse. Without this, coming back
+// onto Settings straight over its content left the window ignoring the mouse:
+// clicks went through to whatever was behind (2026-10-21).
+if (window.parent !== window) {
+  window.addEventListener('mousemove', () => window.parent.postMessage({ tav: 'hover' }, '*'), true);
+}
+
 contextBridge.exposeInMainWorld('tav', {
   call: (tool, args) => ipcRenderer.invoke('call', tool, args),
   backdrop: () => ipcRenderer.invoke('backdrop'),

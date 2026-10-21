@@ -394,7 +394,9 @@ const chatOpen = () => !pane.hidden && paneFrame.src.includes('chat.html');
 
 // The pane's close button and Escape (from inside the frame) come back here.
 window.addEventListener('message', (e) => {
-  if (e.source === paneFrame.contentWindow && e.data && e.data.tav === 'close-pane') showToday();
+  if (e.source !== paneFrame.contentWindow || !e.data) return;
+  if (e.data.tav === 'close-pane') showToday();
+  else if (e.data.tav === 'hover') { setInteractive(true); clearTimeout(closeTimer); }
 });
 
 $('btn-settings').addEventListener('click', () => {

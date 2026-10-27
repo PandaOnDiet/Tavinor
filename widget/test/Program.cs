@@ -62,6 +62,13 @@ string In(string time, DateTime now) => JsonNode.Parse(CardData.Build("{\"meetin
 Check(In("12:05", at) == "in 2 h 5 min" && In("12:00", at) == "in 2 h" && In("10:00", at) == "now", "meeting countdown");
 Check(S(Data("{\"tasks\": {\"open\": 1, \"top\": []}}"), "tasksWord") == "task open" && S(Data("{\"tasks\": {\"open\": 1, \"top\": []}}"), "taskFirst") == "", "one task, names hidden");
 
+// "Yours": Tavinor picked the rule; the card shows its lines, colour and size.
+d = Data("{\"smart\": {\"line1\": \"in 8 min\", \"line2\": \"Standup\", \"color\": \"attention\", \"big\": true}}");
+Check(S(d, "yours1") == "in 8 min" && S(d, "yours2") == "Standup" && S(d, "yoursNote") == "", "yours lines");
+Check(S(d, "yoursColor") == "attention" && S(d, "yoursSize") == "ExtraLarge", "yours style");
+d = Data("{\"smart\": null}");
+Check(S(d, "yours1") == "" && S(d, "yoursNote").Contains("Settings > Widget") && S(d, "yoursColor") == "Default", "yours, no rules");
+
 // Customize: the city now; nothing when there isn't one.
 Check(JsonNode.Parse(CardData.Customize("{" + Weather + "}", "x"))!["city"]!.ToString() == "Noida", "customize city");
 Check(JsonNode.Parse(CardData.Customize(null))!["city"]!.ToString() == "", "customize, no file");
@@ -77,7 +84,7 @@ string[] Used(string file)
 }
 var keys = Data(null).Select(kv => kv.Key).Concat(new[] { "key", "text" }).ToHashSet();
 List<string> missing;
-foreach (var file in new[] { "card.json", "weather.json", "air.json", "meeting.json", "tasks.json", "focus.json" })
+foreach (var file in new[] { "card.json", "weather.json", "air.json", "meeting.json", "tasks.json", "focus.json", "yours.json" })
 {
     missing = Used(file).Except(keys).ToList();
     Check(missing.Count == 0, file + " fields missing from data: " + string.Join(", ", missing));

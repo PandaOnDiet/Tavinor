@@ -166,6 +166,23 @@
                       <LightMode />
                     </ThemeResources>
                   </Definition>
+                  <!-- Small, made for the lock screen: shows the first of your rules that applies (widget.py). -->
+                  <Definition Id="Tavinor_Yours" DisplayName="Tavinor · Yours" Description="Shows what you described in Tavinor, when you said"
+                    AllowMultiple="false" IsCustomizable="false">
+                    <Capabilities>
+                      <Capability><Size Name="small" /></Capability>
+                    </Capabilities>
+                    <ThemeResources>
+                      <Icons>
+                        <Icon Path="Assets\WidgetIcon.png" />
+                      </Icons>
+                      <Screenshots>
+                        <Screenshot Path="Assets\WidgetFocus.png" DisplayAltText="Tavinor widget you describe" />
+                      </Screenshots>
+                      <DarkMode />
+                      <LightMode />
+                    </ThemeResources>
+                  </Definition>
                 </Definitions>
               </WidgetProvider>
             </uap3:Properties>

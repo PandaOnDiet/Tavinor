@@ -252,7 +252,17 @@ def page_widget():
         status = "Last updated %s" % json.loads(widget.FILE.read_text(encoding="utf-8"))["updated"]
     except (OSError, ValueError, KeyError):
         status = "Not written yet"
+    yours = [I(widget.explain(r), dim=False) for r in widget.rules()]
     return {"title": "Widget", "sections": [
+        {"title": "Yours: a widget you describe", "items": [
+            {"type": "text", "id": "widget_rules_text", "label": "What should it show, and when?",
+             "multiline": True, "button": "Make it", "value": tavinor.setting("widget_rules_text", ""),
+             "placeholder": "e.g. my next meeting in red when it's under 10 min, the focus timer "
+                            "while I'm focusing, habits left after 9 pm, otherwise the weather",
+             "desc": "Add it as “Tavinor · Yours”. It picks the first of your rules that applies, every minute."},
+            *(yours or [I("No rules yet")]),
+            *([B("widget_rules_clear", "Clear rules")] if yours else []),
+        ]},
         {"title": "Weather", "items": [
             {"type": "text", "id": "widget_place", "label": "City", "value": place.get("name", ""),
              "button": "Save", "placeholder": "e.g. Noida",
@@ -580,6 +590,30 @@ def act(bar, pg, rid, value):
         tavinor.set_setting("widget_units", value)
         widget.refresh()
         return {}
+    if rid == "widget_rules_text":
+        import bridge
+        import widget
+        if not str(value).strip():
+            return {"note": "describe what it should show first", "ok": False}
+
+        def make():
+            # The model can take a while: answer now, note and redraw when done.
+            try:
+                got, skipped = widget.describe(value)
+                text, ok = "%d rule%s made" % (len(got), "" if len(got) == 1 else "s") + (
+                    ", %d part%s left out (not something it can show)" % (skipped, "" if skipped == 1 else "s")
+                    if skipped else ""), True
+            except (RuntimeError, ValueError) as e:
+                text, ok = str(e), False
+            _note(pg, rid, text, ok)
+            bridge.publish("settings_reload", {"page": pg})
+        threading.Thread(target=make, daemon=True).start()
+        return {"note": "working it out…"}
+    if rid == "widget_rules_clear":
+        import widget
+        tavinor.set_setting("widget_rules", [])
+        widget.refresh()
+        return {"reload": True}
     if rid.startswith("widget_show:") or rid == "widget_private":
         import widget
         if rid != "widget_private" and rid[12:] not in {k for k, _, _ in widget.SHOW}:

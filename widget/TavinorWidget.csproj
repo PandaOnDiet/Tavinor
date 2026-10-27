@@ -31,6 +31,7 @@
     <EmbeddedResource Include="meeting.json" />
     <EmbeddedResource Include="tasks.json" />
     <EmbeddedResource Include="focus.json" />
+    <EmbeddedResource Include="yours.json" />
     <Compile Remove="test\**" />
     <None Remove="test\**" />
   </ItemGroup>

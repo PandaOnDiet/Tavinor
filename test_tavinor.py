@@ -1812,6 +1812,59 @@ def check_widget():
         assert _json.loads(widget.FILE.read_text(encoding="utf-8"))["weather"]["place"] == "Noida"; n += 1
         assert u.page("widget")["title"] == "Widget"; n += 1
 
+        # "Yours": rules the model wrote are checked; a rule with anything
+        # unknown is dropped whole, never loosened.
+        dt = __import__("datetime").datetime
+        got, skipped = widget.clean({"rules": [
+            {"when": [{"if": "meeting_within", "n": 10}], "show": "meeting", "color": "attention", "big": True},
+            {"when": [{"if": "focus_on"}], "show": "focus", "color": "purple"},
+            {"when": [{"if": "after", "time": "21:00"}, {"if": "days", "days": ["Monday", "tue"]}],
+             "show": "text", "text": "Stretch.   " + "x" * 60},
+            {"when": [{"if": "moon_full"}], "show": "weather"},             # unknown condition
+            {"when": [{"if": "after", "time": "9pm"}], "show": "habits"},  # not HH:MM
+            {"when": [{"if": "meeting_within", "n": 5000}], "show": "meeting"},
+            {"when": [], "show": "tasks"}]})
+        assert len(got) == 4 and skipped == 3; n += 1
+        assert got[1]["color"] == "default" and got[2]["when"][1]["days"] == ["mon", "tue"]; n += 1
+        assert len(got[2]["text"]) == 40 and got[2]["text"].startswith("Stretch. x"); n += 1
+        for bad in ({"rules": []}, {"rules": [{"show": "passwords"}]}, None, "text"):
+            try:
+                widget.clean(bad)
+                raise AssertionError("accepted %r" % (bad,))
+            except ValueError:
+                pass
+        n += 1
+        assert widget.explain(got[0]) == "When a meeting starts within 10 min: show the meeting (big, red)"; n += 1
+        assert widget.explain(got[3]) == "Otherwise: show the tasks"; n += 1
+
+        # The model's reply can have prose around the JSON; the read-back
+        # shows on the settings page, and Clear empties it.
+        reply = "Here you go:\n" + _json.dumps({"rules": [r for r in got]}) + "\nDone."
+        saved_complete = tavinor.complete
+        tavinor.complete = lambda system, turns, timeout, effort="low": (reply, "")
+        try:
+            assert widget.describe("meeting in red under 10 min ...")[0] == got; n += 1
+        finally:
+            tavinor.complete = saved_complete
+        page = _json.dumps(u.page("widget"))
+        assert "within 10 min" in page and "widget_rules_clear" in page; n += 1
+
+        # Which rule shows: the first that holds and has something to show.
+        day = _json.loads(bridge.get_day())
+        s = widget.smart(dt(2026, 10, 19, 14, 52), day, False)
+        assert s == {"line1": "in 8 min", "line2": "Standup", "color": "attention", "big": True, "rule": 0}; n += 1
+        assert widget.smart(dt(2026, 10, 19, 14, 52), day, True)["line2"] == "Meeting at 15:00"; n += 1
+        s = widget.smart(dt(2026, 10, 19, 9, 0), day, False)              # meeting far off: focus
+        assert (s["line1"], s["line2"], s["rule"]) == ("12 min", "write spec", 1); n += 1
+        quiet = dict(day, focus=None)
+        assert widget.smart(dt(2026, 10, 19, 21, 30), quiet, False)["line1"].startswith("Stretch."); n += 1
+        assert widget.smart(dt(2026, 10, 22, 21, 30), quiet, False)["line1"] == "1 open"; n += 1   # a Thursday
+        assert widget.snapshot(dt(2026, 10, 19, 14, 52))["smart"]["rule"] == 0; n += 1
+        tavinor.set_setting("widget_rules", [{"show": "meeting"}])         # hand-edited, broken
+        assert widget.snapshot(now)["smart"] is None and "tasks" in widget.snapshot(now); n += 1
+        u.act(None, "widget", "widget_rules_clear", True)
+        assert widget.rules() == [] and widget.smart(now, day, False) is None; n += 1
+
         # The widget's buttons: five actions, checked input, nothing else.
         ran = []
         bridge.run = lambda tool, args: ran.append((tool, args)) or "ok"

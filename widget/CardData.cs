@@ -93,6 +93,16 @@ namespace TavinorWidget
         }
         var h = s["habits"];
         if (h != null) d["habits"] = $"Habits · {Str(h, "done")} of {Str(h, "of")} today";
+        // "Yours": Tavinor already picked the rule and wrote the lines.
+        var y = s["smart"];
+        if (y != null && y.GetValueKind() == JsonValueKind.Object)
+        {
+            d["yours1"] = Str(y, "line1");
+            d["yours2"] = Str(y, "line2");
+            d["yoursColor"] = Str(y, "color") is var c && c != "" && c != "default" ? c : "Default";
+            d["yoursSize"] = (bool?)y["big"] == true ? "ExtraLarge" : "Large";
+        }
+        else d["yoursNote"] = "Describe this widget in Tavinor: Settings > Widget";
         d["updated"] = "Tavinor · " + Str(s, "date") + " · " + Str(s, "updated");
         return Finish(d);
     }
@@ -103,8 +113,11 @@ namespace TavinorWidget
                                   "tasks", "taskList", "todoAny", "focus", "focusOn", "habits", "note", "status", "updated",
                                   // the small one-thing widgets
                                   "rangeShort", "place", "aqiNum", "aqiLabel", "meetingTime", "meetingTitle", "meetingIn",
-                                  "tasksNum", "tasksWord", "taskFirst", "focusLeft", "focusTask" })
+                                  "tasksNum", "tasksWord", "taskFirst", "focusLeft", "focusTask",
+                                  "yours1", "yours2", "yoursNote" })
             d[k] ??= "";
+        d["yoursColor"] ??= "Default";
+        d["yoursSize"] ??= "Large";
         d["todo"] ??= new JsonArray();
         return d.ToJsonString();
     }

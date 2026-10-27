@@ -15,5 +15,6 @@
     <None Include="..\meeting.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\tasks.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\focus.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\yours.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

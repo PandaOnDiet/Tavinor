@@ -26,6 +26,7 @@ namespace TavinorWidget
             ["Tavinor_Meeting"] = ReadCard("meeting.json"),
             ["Tavinor_Tasks"] = ReadCard("tasks.json"),
             ["Tavinor_Focus"] = ReadCard("focus.json"),
+            ["Tavinor_Yours"] = ReadCard("yours.json"),   // the one you describe in words
         };
         static readonly Dictionary<string, string> Kind = new();         // widget id -> Definition id
         static readonly HashSet<string> Customizing = new();             // widget ids showing the city screen

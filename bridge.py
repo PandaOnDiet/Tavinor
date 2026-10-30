@@ -12,6 +12,7 @@ import json
 import os
 import secrets
 import threading
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -93,6 +94,8 @@ def call(tool, args, approve, face=None):
         if face:
             face(state)
         return True, "face: " + state
+    if tool == "claude_event":
+        return True, claude_event(args if isinstance(args, dict) else {})
     if tool not in READS | WRITES:
         return False, "unknown tool %r" % tool
     if tool in WRITES and not approve(["An agent wants to:", describe(tool, args)]):
@@ -136,6 +139,8 @@ def publish(kind, data=None):
 
 def events(after, wait=20.0):
     """Events newer than `after`; waits up to `wait` s for the first one."""
+    global _UI_SEEN
+    _UI_SEEN = time.monotonic()           # the notch is up: Claude Code cards can show
     with _EV_COND:
         if not any(i > after for i, _, _ in _EV):
             _EV_COND.wait(wait)
@@ -199,6 +204,66 @@ def toast(title, text, sub="", buttons=(("OK", None, False),), rows=None,
                       "buttons": [{"id": str(i), "label": b[0], "primary": bool(b[2])}
                                   for i, b in enumerate(buttons)]})
     return tid
+
+
+def toast_gone(tid):
+    """Take a toast down without a click (answered elsewhere, or timed out)."""
+    _TOASTS.pop(tid, None)
+    publish("toast_gone", {"id": tid})
+
+
+# ------------------------------------------------- Claude Code (claude_hook.py)
+CLAUDE_WAIT = 60             # then Claude Code asks in the terminal instead
+_UI_SEEN = 0.0               # monotonic time of the notch's last events() poll
+
+
+def _claude_ask(ev):
+    i = ev.get("tool_input") if isinstance(ev.get("tool_input"), dict) else {}
+    if i.get("command"):
+        return "Run: " + str(i["command"])
+    if i.get("file_path"):
+        return "%s %s" % (ev.get("tool_name", "Change"), Path(str(i["file_path"])).name)
+    return "Use %s: %s" % (ev.get("tool_name", "a tool"), json.dumps(i)[:200])
+
+
+def claude_event(ev):
+    """A Claude Code hook event. A permission prompt shows Allow / Deny /
+    Terminal in the notch and returns "allow" or "deny"; "" means let Claude
+    Code ask in the terminal. A finished turn is a short note."""
+    if time.monotonic() - _UI_SEEN > 45:      # no notch running to show it
+        return ""
+    where = "Claude Code · " + (Path(str(ev.get("cwd") or "")).name or "session")
+    if ev.get("hook_event_name") == "Stop":
+        said = str(ev.get("last_assistant_message") or "").strip().splitlines()
+        gone = threading.Timer(12, toast_gone, (toast(where, (said[0] if said else "Finished")[:160]),))
+        gone.daemon = True
+        gone.start()
+        return ""
+    if ev.get("hook_event_name") != "PermissionRequest":
+        return ""
+    done, pick = threading.Event(), []
+
+    def choose(v):
+        return lambda: (pick.append(v), done.set())
+    tid = toast(where, _claude_ask(ev), buttons=(("Terminal", choose(""), False),
+                                                 ("Deny", choose("deny"), False),
+                                                 ("Allow", choose("allow"), True)),
+                kind="ask", sound=True)
+    if not done.wait(CLAUDE_WAIT):
+        toast_gone(tid)
+    return pick[0] if pick else ""
+
+
+def claude_hook_script():
+    """Where Claude Code runs claude_hook.py from: beside bridge.json, since
+    the app's own copy moves with every update. Refreshed at each start."""
+    import shutil
+    import sys
+    src = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "claude_hook.py"
+    dst = FILE.with_name("claude_hook.py")
+    if src.resolve() != dst.resolve():
+        shutil.copyfile(src, dst)
+    return dst
 
 
 def toast_click(tid, button):
@@ -369,6 +434,12 @@ def serve(approve, face=None, ui=None):
                     encoding="utf-8")
     FILE.with_name("widget-link.json").write_text(
         json.dumps({"port": srv.server_port, "token": WIDGET_TOKEN, "pid": os.getpid()}), encoding="utf-8")
+    import claude_hook
+    if claude_hook.installed():
+        try:
+            claude_hook_script()
+        except OSError:
+            pass                                  # the old copy still works
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 

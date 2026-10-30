@@ -28,7 +28,7 @@ UI_FILES = ["main.js", "preload.js", "dizzy.js", "package.json", "index.html", "
 ELECTRON = ROOT / "ui" / "node_modules" / "electron" / "dist"
 
 # Imported inside functions, so PyInstaller can't see them on its own.
-HIDDEN = ["access", "activity", "agent", "bridge", "face", "focus", "gcal", "hover",
+HIDDEN = ["access", "activity", "agent", "bridge", "claude_hook", "face", "focus", "gcal", "hover",
           "notes", "soul", "tasks", "uisettings", "voice", "winsys", "weather", "widget", "anthropic"]
 # Packages that carry DLLs or data files (Whisper's engine, Piper's
 # phoneme data, ONNX runtime).
@@ -66,6 +66,8 @@ def pyinstaller(ui):
             "--distpath", str(OUT / "dist"), "--workpath", str(OUT / "build"),
             "--specpath", str(OUT),
             "--add-data", "%s%sui" % (ui, sep)]
+    # Copied beside bridge.json for Claude Code to run (bridge.claude_hook_script).
+    args += ["--add-data", "%s%s." % (ROOT / "claude_hook.py", sep)]
     for ico in ("tavinor.ico", "tavinor-tray-dark.ico", "tavinor-tray-light.ico"):
         args += ["--add-data", "%s%s." % (ROOT / ico, sep)]
     for m in HIDDEN:

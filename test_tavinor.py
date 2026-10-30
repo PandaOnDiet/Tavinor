@@ -1726,6 +1726,77 @@ def check_mcp():
     print("mcp: %d checks passed" % n)
 
 
+def check_claude_hooks():
+    """Claude Code's permission prompts in the notch: the click goes back as
+    the hook's answer; anything else leaves the terminal prompt. Connecting
+    keeps the other hooks in settings.json."""
+    import bridge
+    import claude_hook
+    n = 0
+    ask = {"hook_event_name": "PermissionRequest", "cwd": "D:\\proj\\tavinor",
+           "tool_name": "Bash", "tool_input": {"command": "rm -rf build"}}
+    out = claude_hook.answer(ask, "allow")["hookSpecificOutput"]
+    assert out == {"hookEventName": "PermissionRequest", "decision": {"behavior": "allow"}}; n += 1
+    assert claude_hook.answer(ask, "deny")["hookSpecificOutput"]["decision"]["behavior"] == "deny"; n += 1
+    for reply in ("", "maybe", "allow "):          # no click, Terminal, junk: the terminal asks
+        assert claude_hook.answer(ask, reply) is None; n += 1
+    assert claude_hook.answer({"hook_event_name": "Stop"}, "allow") is None; n += 1
+
+    # Tavinor not running: no answer, quickly.
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    claude_hook.BRIDGE = tmp / "missing.json"
+    t = time.time()
+    assert claude_hook.send(ask) == "" and time.time() - t < 2; n += 1
+
+    # The bridge: the card's button is the answer; no notch, no card.
+    saved = bridge.toast, bridge._UI_SEEN, bridge.CLAUDE_WAIT
+    shown = []
+
+    def fake_toast(title, text, sub="", buttons=(("OK", None, False),), **k):
+        shown.append((title, text, [b[0] for b in buttons]))
+        if press:
+            dict((b[0], b[1]) for b in buttons)[press]()
+        return "t1"
+    bridge.toast = fake_toast
+    try:
+        bridge._UI_SEEN = 0.0
+        assert bridge.call("claude_event", ask, lambda l: True) == (True, "") and not shown; n += 1
+        bridge._UI_SEEN = time.monotonic()
+        for press, want in (("Allow", "allow"), ("Deny", "deny"), ("Terminal", "")):
+            assert bridge.call("claude_event", ask, lambda l: False) == (True, want), press; n += 1
+        assert shown[0] == ("Claude Code · tavinor", "Run: rm -rf build",
+                            ["Terminal", "Deny", "Allow"]), shown[0]; n += 1
+        press, bridge.CLAUDE_WAIT = None, 0.05     # nobody clicks: the terminal asks
+        assert bridge.call("claude_event", ask, lambda l: True) == (True, ""); n += 1
+        del shown[:]
+        bridge.call("claude_event", {"hook_event_name": "Stop", "cwd": "D:\\x\\app",
+                                     "last_assistant_message": "Done.\nDetails"}, None)
+        assert shown == [("Claude Code · app", "Done.", ["OK"])], shown; n += 1
+    finally:
+        bridge.toast, bridge._UI_SEEN, bridge.CLAUDE_WAIT = saved
+
+    # Connect / disconnect: other hooks and settings survive; twice is once.
+    cfg = tmp / "settings.json"
+    mine = {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "python x.py"}]}]}
+    cfg.write_text(json.dumps({"theme": "dark", "hooks": mine}), encoding="utf-8")
+    claude_hook.install("C:/t/claude_hook.py", cfg)
+    claude_hook.install("C:/t/claude_hook.py", cfg)
+    d = json.loads(cfg.read_text(encoding="utf-8"))
+    assert d["theme"] == "dark" and d["hooks"]["PreToolUse"] == mine["PreToolUse"]; n += 1
+    assert [len(d["hooks"][e]) for e in claude_hook.EVENTS] == [1, 1]; n += 1
+    assert claude_hook.installed(cfg) and cfg.with_name("settings.json.tavinor-backup").exists(); n += 1
+    claude_hook.remove(cfg)
+    assert json.loads(cfg.read_text(encoding="utf-8")) == {"theme": "dark", "hooks": mine}; n += 1
+    assert not claude_hook.installed(cfg); n += 1
+    cfg.write_text("{ not json", encoding="utf-8")       # never overwrite what we can't read
+    try:
+        claude_hook.install("C:/t/claude_hook.py", cfg)
+        assert False
+    except ValueError:
+        assert cfg.read_text(encoding="utf-8") == "{ not json"; n += 1
+    print("claude hooks: %d checks passed" % n)
+
+
 def check_notch_answer():
     """An answer stays on the notch's card: run()'s "answered" status used to
     replace it (2026-10-20), while commands still show their status."""
@@ -2014,6 +2085,7 @@ if __name__ == "__main__":
     check_piper()
     check_focus_link()
     check_mcp()
+    check_claude_hooks()
     check_gcal()
     check_notes()
     check_voice_face()

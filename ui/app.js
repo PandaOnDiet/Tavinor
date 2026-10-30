@@ -178,6 +178,7 @@ function layoutToasts() {
 async function showToast(t) {
   if (!open) await Promise.race([grab(), new Promise((r) => setTimeout(r, 300))]);
   const box = el('div', 'toast glass k-' + (t.kind || 'info'));
+  box.dataset.id = t.id;
   const bd = el('div', 'bd'); bd.append(el('i'));
   box.append(bd, el('div', 'eyebrow', t.title));
   if (t.text) box.append(el('div', 't', t.text));
@@ -193,8 +194,7 @@ async function showToast(t) {
     btn.type = 'button';
     btn.addEventListener('click', () => {
       window.tav.call('toast_click', { id: t.id, button: b.id }).catch(() => {});
-      box.classList.add('out');
-      setTimeout(() => { box.remove(); layoutToasts(); if (!peeking() && !open) setInteractive(false); }, 280);
+      dropToast(box);
     });
     acts.append(btn);
   }
@@ -203,6 +203,11 @@ async function showToast(t) {
   while (toastBox.children.length > 3) toastBox.lastElementChild.remove();
   layoutToasts();
   for (const x of toastBox.querySelectorAll('.bd')) paint(x);
+}
+
+function dropToast(box) {
+  box.classList.add('out');
+  setTimeout(() => { box.remove(); layoutToasts(); if (!peeking() && !open) setInteractive(false); }, 280);
 }
 
 function el(tag, cls, text) {
@@ -430,5 +435,6 @@ window.tav.on('events', (evs) => {
     else if (e.kind === 'hide') close();
     else if (e.kind === 'config') config = d;
     else if (e.kind === 'toast') showToast(d);
+    else if (e.kind === 'toast_gone') { const b = toastBox.querySelector(`[data-id="${d.id}"]`); if (b) dropToast(b); }
   }
 });

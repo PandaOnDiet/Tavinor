@@ -286,6 +286,11 @@ def page_widget():
     ], "footer": status}
 
 
+def _claude_on():
+    import claude_hook
+    return claude_hook.installed()
+
+
 def page_general():
     """How Tavinor opens and a few odds and ends; the commands it runs have
     their own page."""
@@ -306,6 +311,12 @@ def page_general():
         {"title": "Chat", "items": [
             T("claude", "Claude Code button", "Hands the chat to Claude Code - only when you press it",
               tavinor.setting("claude", False)),
+        ]},
+        {"title": "Claude Code in the notch", "items": [
+            I("Its permission prompts show here as Allow / Deny / Terminal, and a note when it "
+              "finishes. No click in 60 s, or Tavinor closed: it asks in the terminal as usual."),
+            B("claude_hooks", "Disconnect Claude Code" if _claude_on() else "Connect Claude Code",
+              note="adds hooks to ~/.claude/settings.json, backed up first"),
         ]},
     ]}
 
@@ -609,6 +620,19 @@ def act(bar, pg, rid, value):
             bridge.publish("settings_reload", {"page": pg})
         threading.Thread(target=make, daemon=True).start()
         return {"note": "working it out…"}
+    if rid == "claude_hooks":
+        import shutil
+        import claude_hook
+        if claude_hook.installed():
+            claude_hook.remove()
+            return {"reload": True, "note": "disconnected - Claude Code asks in the terminal again"}
+        if not shutil.which("python"):
+            return {"note": "needs Python on PATH (python.org) to run the hook", "ok": False}
+        try:
+            claude_hook.install(bridge.claude_hook_script())
+        except ValueError:
+            return {"note": "couldn't read ~/.claude/settings.json - left it as it was", "ok": False}
+        return {"reload": True, "note": "connected - new Claude Code sessions ask here"}
     if rid == "widget_rules_clear":
         import widget
         tavinor.set_setting("widget_rules", [])

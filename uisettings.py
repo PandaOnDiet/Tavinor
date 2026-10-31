@@ -215,6 +215,9 @@ def _pull(pg, rid, name):
 
 
 SIDES = [("left", "Left"), ("center", "Center"), ("right", "Right")]
+# The whole notch scales: text, cards, toasts and its window.
+SIZES = {"smallest": (0.7, "Smallest"), "small": (0.8, "Small"), "medium": (0.9, "Medium"),
+         "normal": (1.0, "Normal"), "large": (1.15, "Large")}
 
 
 def display_value():
@@ -222,7 +225,8 @@ def display_value():
     where = tavinor.setting("notch_screen", "primary")
     name = ("Follows the mouse" if where == "mouse" else "Main screen" if where == "primary"
             else next((d["label"] for d in bridge.DISPLAYS if d["id"] == where), "Main screen"))
-    return "%s · %s" % (name, dict(SIDES).get(tavinor.setting("notch_side", "center"), "Center"))
+    return "%s · %s · %s" % (name, dict(SIDES).get(tavinor.setting("notch_side", "center"), "Center"),
+                             SIZES.get(tavinor.setting("notch_size", "normal"), SIZES["normal"])[1])
 
 
 def page_display():
@@ -240,7 +244,11 @@ def page_display():
         {"title": "Position", "items": [
             {"type": "radio", "id": "notch_side", "value": tavinor.setting("notch_side", "center"),
              "options": [{"value": k, "label": v} for k, v in SIDES]}]},
-    ], "footer": "Moves straight away"}
+        {"title": "Size", "items": [
+            {"type": "radio", "id": "notch_size", "value": tavinor.setting("notch_size", "normal"),
+             "options": [{"value": k, "label": v, "desc": "%d%%" % round(z * 100)}
+                         for k, (z, v) in SIZES.items()]}]},
+    ], "footer": "Moves and resizes straight away"}
 
 
 def page_widget():
@@ -588,10 +596,10 @@ def act(bar, pg, rid, value):
             tavinor.set_setting("widget_place", None)
             widget.refresh()
             return {"reload": True}
-        place = weather.find(str(value))
-        if not place:
+        found = weather.find(str(value))
+        if not found:
             return {"note": "couldn't find %s" % str(value)[:40], "ok": False}
-        tavinor.set_setting("widget_place", place)
+        tavinor.set_setting("widget_place", found)
         widget.refresh()
         return {"reload": True}
     if rid == "widget_units":
@@ -645,9 +653,10 @@ def act(bar, pg, rid, value):
         tavinor.set_setting(rid, bool(value))
         widget.refresh()
         return {}
-    if rid in ("notch_screen", "notch_side"):
+    if rid in ("notch_screen", "notch_side", "notch_size"):
         import bridge
-        ok = ({"mouse", "primary"} | {d["id"] for d in bridge.DISPLAYS}) if rid == "notch_screen"             else dict(SIDES)
+        ok = ({"mouse", "primary"} | {d["id"] for d in bridge.DISPLAYS}) if rid == "notch_screen"             else SIZES if rid == "notch_size" else dict(SIDES)
+
         if str(value) not in ok:
             raise ValueError("unknown choice")
         tavinor.set_setting(rid, str(value))
@@ -823,7 +832,8 @@ def _test_answers():
 
 def place():
     return {"screen": tavinor.setting("notch_screen", "primary"),
-            "side": tavinor.setting("notch_side", "center")}
+            "side": tavinor.setting("notch_side", "center"),
+            "size": SIZES.get(tavinor.setting("notch_size", "normal"), SIZES["normal"])[0]}
 
 
 def ui_config():

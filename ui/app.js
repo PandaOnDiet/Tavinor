@@ -140,7 +140,7 @@ async function openNow(focusInput) {
     lastActive = Date.now();
     w.classList.add('is-open');
     window.tav.opened(true);
-    showToday();
+    showPill();
   }
   layoutToasts();
   setInteractive(true);
@@ -155,7 +155,7 @@ function close() {
   window.tav.opened(false);
   q.blur();
   setInteractive(false);
-  setTimeout(() => { if (!open) { reply.hidden = true; menu.hidden = true; pane.hidden = true; today.hidden = false; gridIcon(false); } }, 400);
+  setTimeout(() => { if (!open) showPill(); }, 400);
   layoutToasts();
 }
 
@@ -168,7 +168,7 @@ function layoutToasts() {
   // Open: under whichever card shows.
   let top = 168;
   if (open) {
-    const card = !pane.hidden ? pane : !menu.hidden ? menu : reply.hidden ? today : reply;
+    const card = !pane.hidden ? pane : !menu.hidden ? menu : !reply.hidden ? reply : !today.hidden ? today : $('pill');
     top = card.offsetTop + card.offsetHeight + 12;
   }
   toastBox.style.top = top + 'px';
@@ -307,6 +307,17 @@ async function refreshDay() {
   try { renderDay(await window.tav.call('day')); } catch (e) { /* keep what is shown */ }
 }
 
+// Just the pill: what opening shows. Today is in the grid menu, so the
+// notch takes no more of the screen than you ask for (2026-10-31).
+function showPill() {
+  reply.hidden = true;
+  menu.hidden = true;
+  pane.hidden = true;
+  today.hidden = true;
+  gridIcon(false);
+  layoutToasts();
+}
+
 function showToday() {
   reply.hidden = true;
   menu.hidden = true;
@@ -347,7 +358,7 @@ q.addEventListener('blur', () => { if (open) closeSoon(2500); });
 mic.addEventListener('click', () => { window.tav.call('mic').catch(() => {}); });
 $('btn-focus').addEventListener('click', () => ask('start focus for 25 minutes'));
 $('btn-plan').addEventListener('click', () => ask('plan my day'));
-$('btn-back').addEventListener('click', showToday);
+$('btn-back').addEventListener('click', showPill);
 // ---------------------------------------------------------------- menu
 // The grid button: a quiet two-column list. Each item is a phrase Tavinor
 // already understands, sent the same way as typing it.
@@ -383,7 +394,7 @@ function gridIcon(on) {
 // window. Each load starts fresh: Settings on its first page, Chat with
 // its history (and the first message, when there is one).
 async function showPane(url) {
-  if (!open) await openNow(false);    // it ends on Today: let it finish first
+  if (!open) await openNow(false);    // let opening finish first
   today.hidden = true;
   reply.hidden = true;
   menu.hidden = true;
@@ -400,12 +411,12 @@ const chatOpen = () => !pane.hidden && paneFrame.src.includes('chat.html');
 // The pane's close button and Escape (from inside the frame) come back here.
 window.addEventListener('message', (e) => {
   if (e.source !== paneFrame.contentWindow || !e.data) return;
-  if (e.data.tav === 'close-pane') showToday();
+  if (e.data.tav === 'close-pane') showPill();
   else if (e.data.tav === 'hover') { setInteractive(true); clearTimeout(closeTimer); }
 });
 
 $('btn-settings').addEventListener('click', () => {
-  if (!menu.hidden || !pane.hidden) return showToday();
+  if (!menu.hidden || !pane.hidden) return showPill();
   today.hidden = true;
   reply.hidden = true;
   menu.hidden = false;
@@ -415,6 +426,10 @@ $('btn-settings').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------- from Python
+// You clicked another window: close, even with Settings or Chat open (they
+// pin it against the mouse leaving, not against you going elsewhere).
+window.tav.on('blurred', () => { if (open) close(); });
+
 window.tav.on('hello', (h) => {
   setFace(h.face || 'idle');
   if (h.config) config = h.config;

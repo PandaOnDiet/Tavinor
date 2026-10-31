@@ -39,7 +39,7 @@ function call(tool, args = {}, timeout = 30000) {
 }
 
 let win;
-let side = 'center', where = 'primary', onDisplay = null, isOpen = false;
+let side = 'center', where = 'primary', zoom = 1, onDisplay = null, isOpen = false;
 
 // Settings: its own glass window beside the notch, movable by its header.
 // Settings > Display: a chosen screen, the main one, or the pointer's.
@@ -62,10 +62,14 @@ function place() {
   const dd = targetDisplay();
   onDisplay = dd.id;
   const d = dd.bounds;
+  // Settings > Display > Size: the page zooms and the window follows, so
+  // the layout inside is the same at every size.
+  const w = Math.round(W * zoom), h = Math.round(H * zoom);
   const x = side === 'left' ? d.x + 40
-          : side === 'right' ? d.x + d.width - W - 40
-          : d.x + Math.round((d.width - W) / 2);
-  win.setBounds({ x, y: d.y, width: W, height: H });
+          : side === 'right' ? d.x + d.width - w - 40
+          : d.x + Math.round((d.width - w) / 2);
+  win.setBounds({ x, y: d.y, width: w, height: h });
+  win.webContents.setZoomFactor(zoom);
 }
 
 // Events from Python (status, answers, face) by long-poll. Python gone for
@@ -80,7 +84,7 @@ async function pump(after) {
       const open = [win].filter((w) => w && !w.isDestroyed());
       // Every frame: Settings and Chat are a frame inside the notch.
       if (evs.length) for (const w of open) for (const f of w.webContents.mainFrame.framesInSubtree) f.send('events', evs);
-      for (const e of evs) if (e.kind === 'place' && e.data) { where = e.data.screen; side = e.data.side; place(); }
+      for (const e of evs) if (e.kind === 'place' && e.data) { where = e.data.screen; side = e.data.side; zoom = e.data.size || 1; place(); }
     } catch (e) {
       if (++misses >= 4) return app.quit();
       await new Promise((r) => setTimeout(r, 750));
@@ -98,7 +102,7 @@ function looking(on) {
     if (!win || win.isDestroyed()) return;
     const p = screen.getCursorScreenPoint();
     const b = win.getBounds();
-    win.webContents.send('cursor', { x: p.x - b.x, y: p.y - b.y });
+    win.webContents.send('cursor', { x: (p.x - b.x) / zoom, y: (p.y - b.y) / zoom });
   }, 33);
 }
 
@@ -127,6 +131,7 @@ app.whenReady().then(async () => {
   try { hello = await call('hello'); } catch (e) { /* Python still starting */ }
   side = hello.side || 'center';
   where = hello.screen || 'primary';
+  zoom = hello.size || 1;
 
   win = new BrowserWindow({
     width: W, height: H, frame: false, transparent: true, resizable: false,
@@ -160,6 +165,7 @@ app.whenReady().then(async () => {
   }, 400);
   win.loadFile('index.html');
   win.once('ready-to-show', () => {
+    win.webContents.setZoomFactor(zoom);    // a zoom set before the page loaded is lost
     win.showInactive();
     win.webContents.send('hello', hello);
   });
@@ -173,6 +179,7 @@ app.whenReady().then(async () => {
     if (!on) win.blur();
   });
   ipcMain.on('focus', () => win.focus());
+  win.on('blur', () => { if (isOpen) win.webContents.send('blurred'); });
   ipcMain.on('close-me', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
 
   pump(hello.last || 0);

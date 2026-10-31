@@ -1754,7 +1754,7 @@ def check_claude_hooks():
 
     def fake_toast(title, text, sub="", buttons=(("OK", None, False),), **k):
         shown.append((title, text, [b[0] for b in buttons]))
-        if press:
+        if press and press != "OK":
             dict((b[0], b[1]) for b in buttons)[press]()
         return "t1"
     bridge.toast = fake_toast
@@ -1768,6 +1768,19 @@ def check_claude_hooks():
                             ["Terminal", "Deny", "Allow"]), shown[0]; n += 1
         press, bridge.CLAUDE_WAIT = None, 0.05     # nobody clicks: the terminal asks
         assert bridge.call("claude_event", ask, lambda l: True) == (True, ""); n += 1
+        # A question is not a permission: a note pointing at it, no buttons,
+        # and the question stays Claude Code's (2026-10-31: the card offered
+        # Allow on AskUserQuestion with its raw JSON).
+        del shown[:]
+        q = {"hook_event_name": "PermissionRequest", "cwd": "D:\p\web", "tool_name": "AskUserQuestion",
+             "tool_input": {"questions": [{"question": "Which reel goes out?", "options": []}]}}
+        press = "OK"
+        assert bridge.call("claude_event", q, None) == (True, ""); n += 1
+        assert shown == [("Claude Code · web", "Asks you: Which reel goes out?", ["OK"])], shown; n += 1
+        assert bridge._claude_ask({"tool_name": "ExitPlanMode", "tool_input": {
+            "plan": chr(10) + "# Fix the notch" + chr(10) + "1. step"}}) == "Approve the plan: # Fix the notch"; n += 1
+        assert bridge._claude_ask({"tool_name": "WebFetch", "tool_input": {
+            "url": "https://x.org/a", "prompt": "p"}}) == "WebFetch https://x.org/a"; n += 1
         # Vokora: its own wording and button; answered in its room, the card goes.
         press, bridge.CLAUDE_WAIT = "Room", 5
         vok = {"hook_event_name": "PermissionRequest", "source": "Vokora · Codex", "cwd": "D:\p\web",
@@ -1811,6 +1824,35 @@ def check_claude_hooks():
     except ValueError:
         assert cfg.read_text(encoding="utf-8") == "{ not json"; n += 1
     print("claude hooks: %d checks passed" % n)
+
+
+def check_notch_size():
+    """Settings > Display > Size: the notch scales as a whole (too big on a
+    small screen, 2026-10-31). The choice reaches Electron as `size`."""
+    import bridge
+    import uisettings
+    saved = tavinor.SETTINGS, list(bridge._EV)
+    tavinor.SETTINGS = pathlib.Path(tempfile.mkdtemp()) / "s.json"
+    n = 0
+    try:
+        assert uisettings.place()["size"] == 1.0; n += 1          # unchanged until chosen
+        del bridge._EV[:]
+        uisettings.act(None, "display", "notch_size", "small")
+        assert uisettings.place()["size"] == uisettings.SIZES["small"][0] < 1; n += 1
+        assert [(k, d["size"]) for _, k, d in bridge._EV] == [("place", uisettings.place()["size"])]; n += 1
+        try:
+            uisettings.act(None, "display", "notch_size", "huge")
+            assert False
+        except ValueError:
+            assert tavinor.setting("notch_size") == "small"; n += 1
+        sizes = [o for s in uisettings.page_display()["sections"] if s["title"] == "Size"
+                 for o in s["items"][0]["options"]]
+        assert [o["value"] for o in sizes] == list(uisettings.SIZES); n += 1
+        assert "Small" in uisettings.display_value(); n += 1
+    finally:
+        tavinor.SETTINGS = saved[0]
+        bridge._EV[:] = saved[1]
+    print("notch size: %d checks passed" % n)
 
 
 def check_notch_answer():
@@ -2095,6 +2137,7 @@ def check_focus_link():
 
 if __name__ == "__main__":
     check_notch_answer()
+    check_notch_size()
     check_widget()
     check_dizzy()
     check_local_models()

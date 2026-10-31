@@ -220,11 +220,33 @@ _ASKS = {}                   # Vokora ask_id -> its card's Event, for Settled
 
 def _claude_ask(ev):
     i = ev.get("tool_input") if isinstance(ev.get("tool_input"), dict) else {}
+    tool = ev.get("tool_name", "a tool")
     if i.get("command"):
         return "Run: " + str(i["command"])
     if i.get("file_path"):
-        return "%s %s" % (ev.get("tool_name", "Change"), Path(str(i["file_path"])).name)
-    return "Use %s: %s" % (ev.get("tool_name", "a tool"), json.dumps(i)[:200])
+        return "%s %s" % (tool, Path(str(i["file_path"])).name)
+    if tool == "ExitPlanMode":
+        lines = [x for x in str(i.get("plan", "")).splitlines() if x.strip()]
+        return "Approve the plan: " + (lines[0].strip() if lines else "(empty)")
+    if i.get("url"):
+        return "%s %s" % (tool, i["url"])
+    return "Use %s: %s" % (tool, json.dumps(i)[:200])
+
+
+def _claude_question(ev):
+    """AskUserQuestion's first question, or "" for any other tool."""
+    i = ev.get("tool_input") if isinstance(ev.get("tool_input"), dict) else {}
+    qs = i.get("questions") if ev.get("tool_name") == "AskUserQuestion" else None
+    if not qs:
+        return ""
+    return str(qs[0].get("question", "") if isinstance(qs[0], dict) else qs[0]) or "a question"
+
+
+def _note(where, text, seconds=12):
+    """A toast that goes by itself."""
+    gone = threading.Timer(seconds, toast_gone, (toast(where, text[:160]),))
+    gone.daemon = True
+    gone.start()
 
 
 def claude_event(ev):
@@ -245,11 +267,13 @@ def claude_event(ev):
                          Path(str(ev.get("cwd") or "")).name or "session")
     if kind == "Stop":
         said = str(ev.get("last_assistant_message") or "").strip().splitlines()
-        gone = threading.Timer(12, toast_gone, (toast(where, (said[0] if said else "Finished")[:160]),))
-        gone.daemon = True
-        gone.start()
+        _note(where, said[0] if said else "Finished")
         return ""
     if kind != "PermissionRequest":
+        return ""
+    question = _claude_question(ev)
+    if question:                    # answered with its options, where it was asked
+        _note(where, "Asks you: " + question, 20)
         return ""
     done, pick, aid = threading.Event(), [], str(ev.get("ask_id") or "")
 
@@ -338,6 +362,7 @@ def ui_call(bar, tool, args):
             return {"last": _EV_N, "face": _FACE, "name": soul.name(),
                     "side": tavinor.setting("notch_side", "center"),
                     "screen": tavinor.setting("notch_screen", "primary"),
+                    "size": uisettings.place()["size"],
                     "config": uisettings.ui_config()}
     if tool == "events":
         return events(int(args.get("after", 0)), float(args.get("wait", 20)))

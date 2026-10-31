@@ -17,12 +17,12 @@ contextBridge.exposeInMainWorld('tav', {
   opened: (on) => ipcRenderer.send('open', !!on),
   focus: () => ipcRenderer.send('focus'),
   // Inside the notch's pane (Settings, Chat) the page is a frame: closing it means
-  // going back to Today, not closing the notch window.
+  // going back to the pill, not closing the notch window.
   closeMe: () => (window.parent !== window
     ? window.parent.postMessage({ tav: 'close-pane' }, '*')
     : ipcRenderer.send('close-me')),
   on: (channel, fn) => {
-    if (['hello', 'events', 'cursor', 'backdrop', 'dizzy'].includes(channel)) {
+    if (['hello', 'events', 'cursor', 'backdrop', 'dizzy', 'blurred'].includes(channel)) {
       ipcRenderer.on(channel, (_e, data) => fn(data));
     }
   },

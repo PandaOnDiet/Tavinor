@@ -215,6 +215,7 @@ def toast_gone(tid):
 # ------------------------------------------------- Claude Code (claude_hook.py)
 CLAUDE_WAIT = 60             # then Claude Code asks in the terminal instead
 _UI_SEEN = 0.0               # monotonic time of the notch's last events() poll
+_ASKS = {}                   # Vokora ask_id -> its card's Event, for Settled
 
 
 def _claude_ask(ev):
@@ -227,29 +228,44 @@ def _claude_ask(ev):
 
 
 def claude_event(ev):
-    """A Claude Code hook event. A permission prompt shows Allow / Deny /
-    Terminal in the notch and returns "allow" or "deny"; "" means let Claude
-    Code ask in the terminal. A finished turn is a short note."""
+    """A Claude Code hook event, or the same from Vokora's room. A permission
+    prompt shows Allow / Deny / Terminal (Room, for Vokora) in the notch and
+    returns "allow" or "deny"; "" means it is answered where it came from. A
+    finished turn is a short note. Vokora sends Settled with the prompt's
+    ask_id when its room answered first, and the card goes."""
+    kind = ev.get("hook_event_name")
+    if kind == "Settled":
+        waiting = _ASKS.get(str(ev.get("ask_id")))
+        if waiting:
+            waiting.set()
+        return ""
     if time.monotonic() - _UI_SEEN > 45:      # no notch running to show it
         return ""
-    where = "Claude Code · " + (Path(str(ev.get("cwd") or "")).name or "session")
-    if ev.get("hook_event_name") == "Stop":
+    where = "%s · %s" % (ev.get("source") or "Claude Code",
+                         Path(str(ev.get("cwd") or "")).name or "session")
+    if kind == "Stop":
         said = str(ev.get("last_assistant_message") or "").strip().splitlines()
         gone = threading.Timer(12, toast_gone, (toast(where, (said[0] if said else "Finished")[:160]),))
         gone.daemon = True
         gone.start()
         return ""
-    if ev.get("hook_event_name") != "PermissionRequest":
+    if kind != "PermissionRequest":
         return ""
-    done, pick = threading.Event(), []
+    done, pick, aid = threading.Event(), [], str(ev.get("ask_id") or "")
 
     def choose(v):
         return lambda: (pick.append(v), done.set())
-    tid = toast(where, _claude_ask(ev), buttons=(("Terminal", choose(""), False),
-                                                 ("Deny", choose("deny"), False),
-                                                 ("Allow", choose("allow"), True)),
+    tid = toast(where, str(ev.get("text") or _claude_ask(ev)),
+                buttons=(("Room" if ev.get("source") else "Terminal", choose(""), False),
+                         ("Deny", choose("deny"), False), ("Allow", choose("allow"), True)),
                 kind="ask", sound=True)
-    if not done.wait(CLAUDE_WAIT):
+    if aid:
+        _ASKS[aid] = done
+    try:
+        done.wait(CLAUDE_WAIT)
+    finally:
+        _ASKS.pop(aid, None)
+    if not pick:                               # no click here: take the card down
         toast_gone(tid)
     return pick[0] if pick else ""
 
@@ -422,7 +438,10 @@ def serve(approve, face=None, ui=None):
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except ConnectionError:
+                pass            # the caller gave up (answered in the terminal or Vokora's room)
 
         def log_message(self, *a):
             pass

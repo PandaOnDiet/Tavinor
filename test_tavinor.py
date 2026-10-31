@@ -1768,6 +1768,22 @@ def check_claude_hooks():
                             ["Terminal", "Deny", "Allow"]), shown[0]; n += 1
         press, bridge.CLAUDE_WAIT = None, 0.05     # nobody clicks: the terminal asks
         assert bridge.call("claude_event", ask, lambda l: True) == (True, ""); n += 1
+        # Vokora: its own wording and button; answered in its room, the card goes.
+        press, bridge.CLAUDE_WAIT = "Room", 5
+        vok = {"hook_event_name": "PermissionRequest", "source": "Vokora · Codex", "cwd": "D:\p\web",
+               "text": "edit src/app.js", "ask_id": "a1"}
+        assert bridge.call("claude_event", vok, None) == (True, ""); n += 1
+        assert shown[-1] == ("Vokora · Codex · web", "edit src/app.js", ["Room", "Deny", "Allow"]), shown[-1]; n += 1
+        press, gone = None, []
+        real_gone, bridge.toast_gone = bridge.toast_gone, gone.append
+        try:
+            import threading
+            t0 = time.time()
+            threading.Timer(0.2, bridge.call, ("claude_event", {"hook_event_name": "Settled", "ask_id": "a1"}, None)).start()
+            assert bridge.call("claude_event", vok, None) == (True, "") and time.time() - t0 < 3; n += 1
+            assert gone == ["t1"] and not bridge._ASKS; n += 1
+        finally:
+            bridge.toast_gone = real_gone
         del shown[:]
         bridge.call("claude_event", {"hook_event_name": "Stop", "cwd": "D:\\x\\app",
                                      "last_assistant_message": "Done.\nDetails"}, None)

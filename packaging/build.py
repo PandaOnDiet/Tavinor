@@ -59,12 +59,32 @@ def venv():
     return py
 
 
+def version_file():
+    """Tavinor.exe's file details (product name and version): code signing
+    checks that every signed file says what it is."""
+    v = tuple(int(x) for x in VERSION.split(".")) + (0,) * (4 - len(VERSION.split(".")))
+    f = OUT / "version.txt"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(
+        "VSVersionInfo(ffi=FixedFileInfo(filevers=%r, prodvers=%r),\n"
+        " kids=[StringFileInfo([StringTable('040904B0', [\n"
+        "  StringStruct('CompanyName', 'PandaOnDiet'),\n"
+        "  StringStruct('FileDescription', 'Tavinor'),\n"
+        "  StringStruct('FileVersion', '%s'),\n"
+        "  StringStruct('ProductName', 'Tavinor'),\n"
+        "  StringStruct('ProductVersion', '%s'),\n"
+        "  StringStruct('LegalCopyright', 'GPL-3.0-or-later')])]),\n"
+        " VarFileInfo([VarStruct('Translation', [1033, 1200])])])\n" % (v, v, VERSION, VERSION),
+        encoding="utf-8")
+    return f
+
+
 def pyinstaller(ui):
     sep = ";"
     args = [str(venv()), "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed",
             "--name", "Tavinor", "--icon", str(ROOT / "tavinor.ico"),
             "--distpath", str(OUT / "dist"), "--workpath", str(OUT / "build"),
-            "--specpath", str(OUT),
+            "--specpath", str(OUT), "--version-file", str(version_file()),
             "--add-data", "%s%sui" % (ui, sep)]
     # Copied beside bridge.json for Claude Code to run (bridge.claude_hook_script).
     args += ["--add-data", "%s%s." % (ROOT / "claude_hook.py", sep)]

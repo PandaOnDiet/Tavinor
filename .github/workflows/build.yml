@@ -1,0 +1,43 @@
+# Builds Tavinor-Setup-<version>.exe from this repo's source, the way
+# packaging/build.py does locally. Run it by hand (Actions > Build > Run
+# workflow) or by pushing a tag like v0.9.13. The installer is kept as the
+# run's artifact; code signing (SignPath) is added once the project is approved.
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Electron for the notch
+        working-directory: ui
+        run: npm ci
+
+      - name: Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build the app and installer
+        run: python packaging/build.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tavinor-Setup
+          path: packaging/out/Tavinor-Setup-*.exe
+          if-no-files-found: error

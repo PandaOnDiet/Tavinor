@@ -26,6 +26,46 @@ Touching the top edge of the screen above the bar opens it without the hotkey
 [personality file](#personality), and [focus mode](#focus-mode) closes
 distracting tabs until a session ends. The roadmap and plans live in the separate Tavinor-specs repo.
 
+## Download
+
+Windows 10 and 11: get `Tavinor-Setup-<version>.exe` from
+[Releases](https://github.com/PandaOnDiet/tavinor-releases/releases). The installer
+is built from this repo's source by GitHub Actions
+([.github/workflows/build.yml](.github/workflows/build.yml)).
+
+## Licence
+
+GPL-3.0-or-later, see [LICENSE](LICENSE). Tavinor ships the Piper voice library
+(piper-tts), which is GPL-3.0, so the whole app is under the same terms.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [PandaOnDiet](https://github.com/PandaOnDiet)
+- Approvers: [PandaOnDiet](https://github.com/PandaOnDiet)
+
+Only installers built by this repo's GitHub Actions workflow, from a commit in this
+repo, are signed. Every signing request is approved by hand.
+
+### Privacy policy
+
+This program will not transfer any information to other networked systems unless
+specifically requested by the user or the person installing or operating it.
+There is no telemetry and no analytics. What it does connect to, and when:
+
+- **Your answer provider** (NVIDIA, OpenAI, Anthropic, Groq, Gemini, OpenRouter or a
+  local Ollama, as you choose in Settings > Brain): your questions and chat, when you ask.
+- **Open-Meteo**: the city you set, for the widget's weather and air quality.
+- **wttr.in**: the city you name when you ask "weather" (with no city, it guesses from your IP address).
+- **Google Calendar**: only after you sign in, to read and add your events.
+- **Hugging Face**: speech and voice models, downloaded the first time you use voice.
+- **Websites you name**: opened in your own browser when you ask (for example "google …" or "play …").
+
+Your settings, notes, tasks and chat stay on your PC in `%APPDATA%\Tavinor`; API keys
+are kept in Windows Credential Manager.
+
 ## Run
 
 Tavinor lives in the system tray. There is no console window and no terminal left

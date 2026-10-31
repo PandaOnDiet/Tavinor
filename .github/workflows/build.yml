@@ -26,9 +26,12 @@ jobs:
         with:
           node-version: "24"
 
+      # Electron 44 fetches its binary on first run, not on install: fetch it now.
       - name: Electron for the notch
         working-directory: ui
-        run: npm ci
+        run: |
+          npm ci
+          node node_modules/electron/install.js
 
       - name: Inno Setup
         run: choco install innosetup --no-progress -y

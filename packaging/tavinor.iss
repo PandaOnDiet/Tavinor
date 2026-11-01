@@ -34,6 +34,8 @@ Name: "desktopicon"; Description: "Desktop shortcut"; GroupDescription: "Options
 
 [Files]
 Source: "{#AppDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; GPL-3.0: the licence goes with every copy (source: github.com/PandaOnDiet/Tavinor)
+Source: "{#Root}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Tavinor"; Filename: "{app}\Tavinor.exe"

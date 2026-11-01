@@ -29,8 +29,8 @@ distracting tabs until a session ends. The roadmap and plans live in the separat
 ## Download
 
 Windows 10 and 11: get `Tavinor-Setup-<version>.exe` from
-[Releases](https://github.com/PandaOnDiet/tavinor-releases/releases). The installer
-is built from this repo's source by GitHub Actions
+[Releases](https://github.com/PandaOnDiet/Tavinor/releases/latest). The installer
+is built from this repo's source and published by GitHub Actions
 ([.github/workflows/build.yml](.github/workflows/build.yml)).
 
 ## Licence

@@ -1,22 +1,32 @@
 # Builds Tavinor-Setup-<version>.exe from this repo's source, the way
-# packaging/build.py does locally. Run it by hand (Actions > Build > Run
-# workflow) or by pushing a tag like v0.9.13. The installer is kept as the
-# run's artifact; code signing (SignPath) is added once the project is approved.
+# packaging/build.py does locally, and publishes it as this repo's release.
+# Push a tag like v0.9.14 to build and release that version. Run it by hand
+# (Actions > Build > Run workflow) to build main without releasing, or give a
+# tag there to (re)build and release that tag. Code signing (SignPath) is
+# added once the project is approved.
 name: Build
 
 on:
-  workflow_dispatch:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and release (empty: build main, no release)"
+        required: false
 
 permissions:
-  contents: read
+  contents: write            # to publish the release
 
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || inputs.tag || github.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -44,3 +54,25 @@ jobs:
           name: Tavinor-Setup
           path: packaging/out/Tavinor-Setup-*.exe
           if-no-files-found: error
+
+      - name: Release
+        if: env.TAG != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          exe=$(ls packaging/out/Tavinor-Setup-*.exe)
+          version=$(cat packaging/VERSION | tr -d '\r\n')
+          [ "v$version" = "$TAG" ] || { echo "tag $TAG does not match packaging/VERSION $version"; exit 1; }
+          sha=$(sha256sum "$exe" | cut -d' ' -f1)
+          {
+            echo "**Download:** \`$(basename "$exe")\` below. The installer is not code-signed yet, so Windows SmartScreen will warn you: click **More info**, then **Run anyway**."
+            echo
+            echo "Built by GitHub Actions from tag \`$TAG\` of this repo. Requires Windows 10 (2004) or Windows 11; widgets need Windows 11."
+            echo
+            echo "SHA-256: \`$sha\`"
+            echo
+            echo "Licence: GPL-3.0."
+          } > notes.md
+          gh release delete "$TAG" --yes 2>/dev/null || true   # a rebuild of the same tag replaces its release
+          gh release create "$TAG" "$exe" --title "Tavinor $version" --notes-file notes.md --verify-tag --latest
